@@ -214,10 +214,43 @@ print("Query order:", query_ids)
 pred_adj = outputs["pred_adj"][0]
 pred_adj = pred_adj[query_ids][:, query_ids].sigmoid()
 
-print("\nPredicted relationship scores:")
-for row in pred_adj:
-    print([round(x, 10) for x in row.tolist()])
+# print("\nPredicted relationship scores:")
+# for row in pred_adj:
+#     print([round(x, 10) for x in row.tolist()])
+
+# Convert predicted probabilities to a binary adjacency matrix
+predicted_binary = (pred_adj > 0.5).int()
 
 print("\nPredicted binary adjacency (threshold = 0.5):")
-for row in (pred_adj > 0.5).int():
+for row in predicted_binary:
     print(row.tolist())
+
+
+def evaluate_relationships(ground_truth, predicted):
+    tp = 0
+    fp = 0
+    fn = 0
+
+    for i in range(len(ground_truth)):
+        for j in range(len(ground_truth)):
+            if i == j:
+                continue
+
+            gt = ground_truth[i][j]
+            pred = predicted[i][j]
+
+            if gt == 1 and pred == 1:
+                tp += 1
+            elif gt == 1 and pred == 0:
+                fn += 1
+            elif gt == 0 and pred == 1:
+                fp += 1
+    return tp, fp, fn
+
+
+tp, fp, fn = evaluate_relationships(gt_adj, predicted_binary.tolist())
+print(f"TP: {tp}, FP: {fp}, FN: {fn}")
+
+OR = tp / (tp + fn)
+OP = tp / (tp + fp)
+print(f"Object Recall: {OR}, Object Precision: {OP}")
