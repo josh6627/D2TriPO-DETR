@@ -166,7 +166,7 @@ def get_args_parser():
 
 
     # Traing utils
-    parser.add_argument('--output_dir', default=r'/data/D2TriPO_DETR01/results', 
+    parser.add_argument('--output_dir', default='./results',
                         help='path where to save, empty for no saving')
     parser.add_argument('--note', default='', help='add some notes to the experiment')
     parser.add_argument('--device', default='cuda', help='device to use for training / testing')
@@ -402,7 +402,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
 
-    args = parser.parse_args(args=[])
+    args = parser.parse_args()
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     main(args)

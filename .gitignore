@@ -1,0 +1,44 @@
+
+# ==============================
+# D2TriPO-DETR Research
+# ==============================
+
+# Datasets (VMRD and lab datasets)
+data/
+
+# Pretrained model weights and checkpoints
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Python environments
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Compiled CUDA / C++ extensions
+build/
+dist/
+*.o
+*.so
+
+# Experiment logs and temporary output
+*.log
+wandb/
+runs/
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
