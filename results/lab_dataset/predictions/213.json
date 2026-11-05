@@ -1,0 +1,58 @@
+{
+  "image": "213.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 94,
+      "class_id": 22,
+      "class_name": "toothpaste",
+      "confidence": 0.794304,
+      "bbox_xyxy": [
+        140.08,
+        243.4,
+        342.88,
+        431.33
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 18,
+      "class_id": 17,
+      "class_name": "cup",
+      "confidence": 0.716025,
+      "bbox_xyxy": [
+        77.4,
+        187.28,
+        214.19,
+        326.3
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

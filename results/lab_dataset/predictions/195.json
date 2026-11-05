@@ -1,0 +1,170 @@
+{
+  "image": "195.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 30,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.967845,
+      "bbox_xyxy": [
+        61.04,
+        237.71,
+        239.12,
+        439.19
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 182,
+      "class_id": 20,
+      "class_name": "bottle",
+      "confidence": 0.886239,
+      "bbox_xyxy": [
+        231.87,
+        272.36,
+        333.57,
+        363.18
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 117,
+      "class_id": 25,
+      "class_name": "card",
+      "confidence": 0.866383,
+      "bbox_xyxy": [
+        111.87,
+        76.25,
+        287.09,
+        188.2
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 165,
+      "class_id": 20,
+      "class_name": "bottle",
+      "confidence": 0.65374,
+      "bbox_xyxy": [
+        231.6,
+        217.5,
+        388.69,
+        363.22
+      ]
+    },
+    {
+      "id": 4,
+      "query_id": 1,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.440586,
+      "bbox_xyxy": [
+        165.79,
+        184.08,
+        377.99,
+        358.89
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.999537
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.806921
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.162895
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.183955
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [
+    {
+      "above_id": 0,
+      "below_id": 4,
+      "above_query_id": 30,
+      "below_query_id": 1,
+      "above_class": "pliers",
+      "below_class": "box",
+      "confidence": 0.999537
+    },
+    {
+      "above_id": 1,
+      "below_id": 4,
+      "above_query_id": 182,
+      "below_query_id": 1,
+      "above_class": "bottle",
+      "below_class": "box",
+      "confidence": 0.806921
+    }
+  ],
+  "contradictory_pairs": []
+}

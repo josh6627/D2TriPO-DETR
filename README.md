@@ -132,7 +132,62 @@ python setup.py install
 ---
 
 ## Usage
+### Evaluating a labeled dataset
+
+`evaluate_dataset.py` requires a dataset folder with `images/<split>`,
+`labels/<split>`, and `adj/<split>`. It supports JPG, JPEG, and PNG images;
+grasp annotations are not required. For example:
+
+```bash
+python evaluate_dataset.py --dataset-root data/topdown_labeled --checkpoint results/topdown_finetune/checkpoint.pth
+python evaluate_dataset.py --dataset-root data/vmrd
+```
+
+Use `--split both` to evaluate train and val in one run, loading the model once
+and saving separate results for each split:
+
+```bash
+python evaluate_dataset.py --dataset-root data/topdown_labeled --split both
+```
+
+This uses the default checkpoint without fine-tuning. Use `--checkpoint` to
+select other weights. The split names describe the dataset folders; neither
+split is used to update model weights during evaluation.
+
+Use `--split train` for only train (the default is `val`),
+`--limit 10` to evaluate up to 10 images per split, or `--output-dir results/custom` to change the
+output directory. CSV results and error logs include the dataset name and split,
+for example `results/topdown_labeled_val_results.csv`. Evaluation uses CUDA.
+Choose a checkpoint trained with the dataset's class IDs, including any added
+classes; the default checkpoint is `checkpoints/checkpoint0110.pth`.
+
+Evaluation also saves annotated prediction images to
+`<output-dir>/visualizations/<dataset-name>_<split>/`: one `_objects.jpg` image
+with class names and confidence scores, and one `_relationships.jpg` image with
+arrows pointing from upper objects to lower objects. These use the same drawing
+style as `infer_unlabeled_dataset.py` and reuse the evaluation forward pass.
+They show predictions without ground-truth filtering, using object confidence
+above 0.4 and relationship probability above 0.5. Class names come from the
+checkpoint when available. Use `--no-visualizations` to save only metrics and logs.
+Set `--visualization-dir /path/to/images` to choose a separate image output
+location; dataset/split subfolders are added beneath it. `--output-dir` controls
+the CSV results and error logs.
+
 ### Dataset Preparation
+
+For unlabeled images in `data/topdown_renders`, run
+`python scripts/label_dataset.py` in the `d2tripo` environment. The desktop
+labeler supports object boxes, rotated grasps, manipulation relationships,
+saved progress, and new named classes. See the [labeling guide](scripts/README_labeling.md)
+for export and training with `--dataset_root` and automatic class counts.
+To label boxes and relationships without grasps, use
+`python scripts/label_dataset.py --no-grasps`; training automatically reads
+this choice from the exported dataset.
+
+To convert the extracted MetaGraspNet real-world data in `data/MetaGraspNetRaw`
+to this model's dataset layout, run `python scripts/convert_metagraspnet.py`.
+See [MetaGraspNet conversion](scripts/README_metagraspnet.md) for class mapping,
+novel objects, grasp conversion assumptions, and loading the resulting dataset.
 
 Please download [VMRD](https://gr.xjtu.edu.cn/zh/web/zeuslan/dataset) dataset and [Cornell](https://journals.sagepub.com/doi/abs/10.1177/0278364914549607) dataset, then organize them as following:
 

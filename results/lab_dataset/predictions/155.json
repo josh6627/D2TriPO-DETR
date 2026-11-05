@@ -1,0 +1,104 @@
+{
+  "image": "155.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 11,
+      "class_id": 22,
+      "class_name": "toothpaste",
+      "confidence": 0.957346,
+      "bbox_xyxy": [
+        241.0,
+        39.7,
+        428.95,
+        239.78
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 45,
+      "class_id": 29,
+      "class_name": "notebook",
+      "confidence": 0.621116,
+      "bbox_xyxy": [
+        207.12,
+        163.38,
+        478.44,
+        387.53
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 295,
+      "class_id": 25,
+      "class_name": "card",
+      "confidence": 0.596803,
+      "bbox_xyxy": [
+        274.06,
+        311.57,
+        368.48,
+        489.15
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      1,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      1,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.999989,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.999988,
+      0.0
+    ]
+  ],
+  "relationships": [
+    {
+      "above_id": 0,
+      "below_id": 1,
+      "above_query_id": 11,
+      "below_query_id": 45,
+      "above_class": "toothpaste",
+      "below_class": "notebook",
+      "confidence": 0.999989
+    },
+    {
+      "above_id": 2,
+      "below_id": 1,
+      "above_query_id": 295,
+      "below_query_id": 45,
+      "above_class": "card",
+      "below_class": "notebook",
+      "confidence": 0.999988
+    }
+  ],
+  "contradictory_pairs": []
+}

@@ -4,5 +4,5 @@ import torchvision
 
 from .vmrd import build as build_vmrd
 
-def build_dataset(image_set):
-    return build_vmrd(image_set)
+def build_dataset(image_set, args=None):
+    return build_vmrd(image_set, args=args)

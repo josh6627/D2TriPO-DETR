@@ -1,0 +1,126 @@
+{
+  "image": "216.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 49,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.976002,
+      "bbox_xyxy": [
+        71.2,
+        172.75,
+        244.24,
+        290.84
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 133,
+      "class_id": 4,
+      "class_name": "wrench",
+      "confidence": 0.923809,
+      "bbox_xyxy": [
+        109.11,
+        113.59,
+        272.68,
+        290.95
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 107,
+      "class_id": 25,
+      "class_name": "card",
+      "confidence": 0.863266,
+      "bbox_xyxy": [
+        296.96,
+        125.27,
+        442.16,
+        285.86
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 48,
+      "class_id": 20,
+      "class_name": "bottle",
+      "confidence": 0.858297,
+      "bbox_xyxy": [
+        261.15,
+        253.55,
+        410.3,
+        405.15
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      1,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.99996,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      2.2e-05,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [
+    {
+      "above_id": 1,
+      "below_id": 0,
+      "above_query_id": 133,
+      "below_query_id": 49,
+      "above_class": "wrench",
+      "below_class": "box",
+      "confidence": 0.99996
+    }
+  ],
+  "contradictory_pairs": []
+}

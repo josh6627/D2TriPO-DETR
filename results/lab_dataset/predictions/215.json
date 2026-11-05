@@ -1,0 +1,85 @@
+{
+  "image": "215.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 255,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.80892,
+      "bbox_xyxy": [
+        247.54,
+        218.15,
+        393.22,
+        404.61
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 237,
+      "class_id": 30,
+      "class_name": "stapler",
+      "confidence": 0.495683,
+      "bbox_xyxy": [
+        61.25,
+        275.36,
+        172.72,
+        345.41
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 260,
+      "class_id": 5,
+      "class_name": "towel",
+      "confidence": 0.434845,
+      "bbox_xyxy": [
+        95.94,
+        10.59,
+        328.82,
+        197.58
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      9e-06
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      7e-06,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

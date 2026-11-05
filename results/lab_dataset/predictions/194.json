@@ -1,0 +1,151 @@
+{
+  "image": "194.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 82,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.90261,
+      "bbox_xyxy": [
+        41.84,
+        324.14,
+        220.09,
+        390.15
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 133,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.899841,
+      "bbox_xyxy": [
+        97.46,
+        109.88,
+        264.47,
+        274.02
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 147,
+      "class_id": 27,
+      "class_name": "cans",
+      "confidence": 0.824286,
+      "bbox_xyxy": [
+        264.37,
+        99.03,
+        333.02,
+        177.99
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 51,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.785549,
+      "bbox_xyxy": [
+        319.68,
+        236.85,
+        437.66,
+        299.74
+      ]
+    },
+    {
+      "id": 4,
+      "query_id": 162,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.431881,
+      "bbox_xyxy": [
+        228.14,
+        293.21,
+        316.11,
+        467.88
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      2.6e-05,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

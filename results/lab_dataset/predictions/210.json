@@ -1,0 +1,58 @@
+{
+  "image": "210.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 285,
+      "class_id": 22,
+      "class_name": "toothpaste",
+      "confidence": 0.928103,
+      "bbox_xyxy": [
+        230.1,
+        139.92,
+        461.52,
+        256.97
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 166,
+      "class_id": 14,
+      "class_name": "wallet",
+      "confidence": 0.410511,
+      "bbox_xyxy": [
+        102.53,
+        75.32,
+        242.87,
+        223.53
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

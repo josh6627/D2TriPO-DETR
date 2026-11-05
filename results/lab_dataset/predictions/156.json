@@ -1,0 +1,116 @@
+{
+  "image": "156.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 244,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.951591,
+      "bbox_xyxy": [
+        35.27,
+        156.02,
+        210.52,
+        244.31
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 77,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.765299,
+      "bbox_xyxy": [
+        195.44,
+        240.77,
+        304.68,
+        309.71
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 230,
+      "class_id": 22,
+      "class_name": "toothpaste",
+      "confidence": 0.709827,
+      "bbox_xyxy": [
+        33.77,
+        310.66,
+        262.35,
+        464.31
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 90,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.547104,
+      "bbox_xyxy": [
+        362.24,
+        222.59,
+        433.77,
+        306.65
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.000216,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1e-06,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

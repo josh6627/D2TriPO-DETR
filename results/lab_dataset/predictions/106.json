@@ -1,0 +1,58 @@
+{
+  "image": "106.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 153,
+      "class_id": 22,
+      "class_name": "toothpaste",
+      "confidence": 0.933955,
+      "bbox_xyxy": [
+        102.98,
+        264.01,
+        307.65,
+        450.93
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 133,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.667276,
+      "bbox_xyxy": [
+        112.97,
+        98.67,
+        261.88,
+        290.02
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

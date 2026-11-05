@@ -1,0 +1,116 @@
+{
+  "image": "181.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 220,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.943595,
+      "bbox_xyxy": [
+        66.82,
+        129.42,
+        216.16,
+        309.35
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 255,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.884838,
+      "bbox_xyxy": [
+        262.42,
+        278.8,
+        353.4,
+        381.59
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 54,
+      "class_id": 25,
+      "class_name": "card",
+      "confidence": 0.842242,
+      "bbox_xyxy": [
+        216.21,
+        81.25,
+        391.23,
+        181.67
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 43,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.586775,
+      "bbox_xyxy": [
+        349.26,
+        218.84,
+        441.19,
+        446.88
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      2e-06,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.001392,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

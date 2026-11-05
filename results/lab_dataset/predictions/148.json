@@ -1,0 +1,116 @@
+{
+  "image": "148.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 296,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.959619,
+      "bbox_xyxy": [
+        195.11,
+        270.15,
+        381.99,
+        415.86
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 54,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.817546,
+      "bbox_xyxy": [
+        194.33,
+        25.58,
+        380.47,
+        227.42
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 12,
+      "class_id": 18,
+      "class_name": "mobile phone",
+      "confidence": 0.79907,
+      "bbox_xyxy": [
+        94.96,
+        132.18,
+        193.65,
+        222.44
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 56,
+      "class_id": 27,
+      "class_name": "cans",
+      "confidence": 0.479135,
+      "bbox_xyxy": [
+        133.16,
+        283.64,
+        205.78,
+        354.38
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

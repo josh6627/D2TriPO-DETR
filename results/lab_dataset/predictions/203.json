@@ -1,0 +1,85 @@
+{
+  "image": "203.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 107,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.97829,
+      "bbox_xyxy": [
+        320.38,
+        200.42,
+        414.45,
+        281.78
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 11,
+      "class_id": 20,
+      "class_name": "bottle",
+      "confidence": 0.922623,
+      "bbox_xyxy": [
+        257.21,
+        112.87,
+        361.18,
+        202.7
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 18,
+      "class_id": 6,
+      "class_name": "knife",
+      "confidence": 0.57752,
+      "bbox_xyxy": [
+        97.52,
+        169.18,
+        168.58,
+        348.9
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

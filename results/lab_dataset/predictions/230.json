@@ -1,0 +1,58 @@
+{
+  "image": "230.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 12,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.974537,
+      "bbox_xyxy": [
+        113.03,
+        130.37,
+        207.04,
+        213.17
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 94,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.853406,
+      "bbox_xyxy": [
+        185.59,
+        250.64,
+        338.37,
+        443.11
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

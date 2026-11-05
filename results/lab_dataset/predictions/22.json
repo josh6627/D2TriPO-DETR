@@ -1,0 +1,116 @@
+{
+  "image": "22.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 278,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.957351,
+      "bbox_xyxy": [
+        0.0,
+        129.61,
+        162.35,
+        304.63
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 67,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.936346,
+      "bbox_xyxy": [
+        314.79,
+        227.71,
+        456.18,
+        381.33
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 92,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.933712,
+      "bbox_xyxy": [
+        133.92,
+        337.86,
+        221.23,
+        445.6
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 74,
+      "class_id": 0,
+      "class_name": "banana",
+      "confidence": 0.403576,
+      "bbox_xyxy": [
+        285.97,
+        68.38,
+        462.09,
+        140.0
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      4e-06,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      4e-06,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

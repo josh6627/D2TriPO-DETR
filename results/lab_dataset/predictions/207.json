@@ -1,0 +1,58 @@
+{
+  "image": "207.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 9,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.557616,
+      "bbox_xyxy": [
+        98.58,
+        241.01,
+        313.12,
+        336.29
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 204,
+      "class_id": 0,
+      "class_name": "banana",
+      "confidence": 0.501058,
+      "bbox_xyxy": [
+        191.46,
+        54.09,
+        292.05,
+        214.86
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      1.7e-05,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

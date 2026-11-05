@@ -1,0 +1,151 @@
+{
+  "image": "103.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 17,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.947715,
+      "bbox_xyxy": [
+        202.03,
+        273.18,
+        280.87,
+        378.82
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 51,
+      "class_id": 20,
+      "class_name": "bottle",
+      "confidence": 0.73028,
+      "bbox_xyxy": [
+        329.31,
+        200.08,
+        421.35,
+        311.05
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 63,
+      "class_id": 27,
+      "class_name": "cans",
+      "confidence": 0.605746,
+      "bbox_xyxy": [
+        245.93,
+        159.46,
+        313.01,
+        229.43
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 139,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.559915,
+      "bbox_xyxy": [
+        93.76,
+        161.83,
+        312.68,
+        261.27
+      ]
+    },
+    {
+      "id": 4,
+      "query_id": 48,
+      "class_id": 25,
+      "class_name": "card",
+      "confidence": 0.510087,
+      "bbox_xyxy": [
+        290.73,
+        295.33,
+        363.68,
+        395.74
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.7e-05,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1e-06,
+      0.004584,
+      0.000171,
+      0.108367,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

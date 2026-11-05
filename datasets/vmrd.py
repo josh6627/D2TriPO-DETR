@@ -1,4 +1,5 @@
 import os
+from contextlib import nullcontext
 import torch
 import torch.utils.data
 from torch.utils.data import Dataset
@@ -20,6 +21,7 @@ class CustomDataset(Dataset):
         label_folder_2,
         label_folder_3,
         transform=None,
+        require_grasps=True,
     ):
         if not os.path.exists(image_folder):
             raise ValueError(f"Image folder {image_folder} does not exist.")
@@ -27,7 +29,7 @@ class CustomDataset(Dataset):
             raise ValueError(f"Label folder {label_folder_1} does not exist.")
         if not os.path.exists(label_folder_2):
             raise ValueError(f"Label folder {label_folder_2} does not exist.")
-        if not os.path.exists(label_folder_3):
+        if require_grasps and not os.path.exists(label_folder_3):
             raise ValueError(f"Label folder {label_folder_3} does not exist.")
 
         self.image_folder = image_folder
@@ -35,6 +37,7 @@ class CustomDataset(Dataset):
         self.label_folder_2 = label_folder_2
         self.label_folder_3 = label_folder_3
         self.transform = transform
+        self.require_grasps = require_grasps
         self.image_files = [
             f for f in os.listdir(image_folder) if f.endswith(("jpg", "jpeg", "png"))
         ]
@@ -112,7 +115,7 @@ class CustomDataset(Dataset):
         grasp_angles = []
         grasp_heights = []
         try:
-            with open(label_path_3, "r") as f:
+            with (open(label_path_3, "r") if self.require_grasps else nullcontext([])) as f:
                 for line in f:
                     parts = line.strip().split()
                     try:
@@ -151,7 +154,9 @@ class CustomDataset(Dataset):
         except FileNotFoundError as e:
             print(f"Label file {label_path_3} not found: {e}")
 
-        grasp_points = torch.tensor(grasp_points, dtype=torch.float32)
+        if self.require_grasps and not grasp_points:
+            raise ValueError(f"No grasp labels in {label_path_3}; use --no-grasps for boxes/relationships training.")
+        grasp_points = torch.tensor(grasp_points, dtype=torch.float32).reshape(-1, 4, 2)
         grasp_angles = torch.tensor(grasp_angles, dtype=torch.float32)
         grasp_classes = torch.tensor(grasp_classes, dtype=torch.int64)
         grasp_difficulties = torch.tensor(grasp_difficulty, dtype=torch.int64)
@@ -237,10 +242,12 @@ def make_vmrd_transforms(image_set):
     raise ValueError(f"unknown {image_set}")
 
 
-def build(image_set):
+def build(image_set, args=None):
 
     # locate the VMRD dataset relative to the repository
     dataset_root = Path(__file__).resolve().parent.parent / "data" / "vmrd"
+    if args is not None and getattr(args, 'dataset_root', None):
+        dataset_root = Path(args.dataset_root)
     PATHS = {
         "train": (
             str(dataset_root / "images" / "train"),
@@ -263,6 +270,7 @@ def build(image_set):
         adj_folder,
         grasp_folder,
         transform=make_vmrd_transforms(image_set),
+        require_grasps=not getattr(args, 'no_grasps', False),
     )
     return dataset
 

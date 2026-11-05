@@ -1,0 +1,126 @@
+{
+  "image": "107.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 48,
+      "class_id": 22,
+      "class_name": "toothpaste",
+      "confidence": 0.903816,
+      "bbox_xyxy": [
+        232.27,
+        274.54,
+        468.83,
+        375.46
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 52,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.840292,
+      "bbox_xyxy": [
+        333.2,
+        201.19,
+        441.23,
+        287.15
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 30,
+      "class_id": 20,
+      "class_name": "bottle",
+      "confidence": 0.561911,
+      "bbox_xyxy": [
+        92.16,
+        234.96,
+        241.37,
+        386.27
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 195,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.547512,
+      "bbox_xyxy": [
+        197.98,
+        41.73,
+        373.01,
+        204.94
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      1,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.671178,
+      0.0,
+      0.0
+    ],
+    [
+      2e-06,
+      0.0,
+      0.0,
+      1e-06
+    ],
+    [
+      0.0,
+      3e-06,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.000124,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [
+    {
+      "above_id": 0,
+      "below_id": 1,
+      "above_query_id": 48,
+      "below_query_id": 52,
+      "above_class": "toothpaste",
+      "below_class": "box",
+      "confidence": 0.671178
+    }
+  ],
+  "contradictory_pairs": []
+}

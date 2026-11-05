@@ -130,7 +130,14 @@ class MSDeformAttn(nn.Module):
         else:
             raise ValueError(
                 'Last dim of reference_points must be 2 or 4, but get {} instead.'.format(reference_points.shape[-1]))
-        output = MSDeformAttnFunction.apply(
-            value, input_spatial_shapes, input_level_start_index, sampling_locations, attention_weights, self.im2col_step)
+        # The custom CUDA kernel supports float32/float64, but not AMP's
+        # float16/bfloat16. Cast here so autograd also handles the conversion
+        # back to the surrounding mixed-precision projections.
+        with torch.cuda.amp.autocast(enabled=False):
+            kernel_value = value.float() if value.dtype in (torch.float16, torch.bfloat16) else value
+            output = MSDeformAttnFunction.apply(
+                kernel_value, input_spatial_shapes, input_level_start_index,
+                sampling_locations.to(kernel_value.dtype),
+                attention_weights.to(kernel_value.dtype), self.im2col_step)
         output = self.output_proj(output)
         return output

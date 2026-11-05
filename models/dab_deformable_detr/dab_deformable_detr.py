@@ -556,7 +556,8 @@ class SetCriterion(nn.Module):
         outputs_without_aux = {k: v for k, v in outputs.items() if k != 'aux_outputs' and k != 'enc_outputs'}
 
         indices = self.matcher(outputs_without_aux, targets)
-        indices_grasp = self.matcher_grasp(outputs_without_aux, targets)
+        train_grasps = any(loss.startswith('grasp_') for loss in self.losses)
+        indices_grasp = self.matcher_grasp(outputs_without_aux, targets) if train_grasps else None
 
         num_boxes = sum(len(t["labels"]) for t in targets)
         num_boxes = torch.as_tensor([num_boxes], dtype=torch.float, device=next(iter(outputs.values())).device)
@@ -564,7 +565,7 @@ class SetCriterion(nn.Module):
             torch.distributed.all_reduce(num_boxes)
         num_boxes = torch.clamp(num_boxes / get_world_size(), min=1).item()
 
-        num_grasp_boxes = sum(len(t["grasp_classes"]) for t in targets)
+        num_grasp_boxes = sum(len(t["grasp_classes"]) for t in targets) if train_grasps else 0
         num_grasp_boxes = torch.as_tensor([num_grasp_boxes], dtype=torch.float, device=next(iter(outputs.values())).device)
         if is_dist_avail_and_initialized():
             torch.distributed.all_reduce(num_grasp_boxes)
@@ -579,7 +580,7 @@ class SetCriterion(nn.Module):
         if 'aux_outputs' in outputs:
             for i, aux_outputs in enumerate(outputs['aux_outputs']):
                 indices = self.matcher(aux_outputs, targets)
-                indices_grasp = self.matcher_grasp(aux_outputs, targets)
+                indices_grasp = self.matcher_grasp(aux_outputs, targets) if train_grasps else None
                 for loss in self.losses:
                     kwargs = {}
                     l_dict = self.get_loss(loss, aux_outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp, **kwargs)
@@ -594,12 +595,14 @@ class SetCriterion(nn.Module):
 
             indices = self.matcher(enc_outputs, bin_targets)
             for loss in self.losses:
-                if loss == 'masks':
+                # Encoder proposals supervise object classes/boxes, not grasp or adjacency heads.
+                if loss not in ('labels', 'boxes'):
                     continue
                 kwargs = {}
                 if loss == 'labels':
                     kwargs['log'] = False
-                l_dict = self.get_loss(loss, enc_outputs, bin_targets, indices, num_grasp_boxes, **kwargs)
+                l_dict = self.get_loss(loss, enc_outputs, bin_targets, num_boxes, indices,
+                                       num_grasp_boxes, None, **kwargs)
                 l_dict = {k + f'_enc': v for k, v in l_dict.items()}
                 losses.update(l_dict)
 
@@ -664,7 +667,8 @@ class MLP(nn.Module):
 
 
 def build_dab_deformable_detr(args):
-    num_classes = 32 if args.dataset_file != 'coco' else 32
+    from util.dataset_config import get_num_classes
+    num_classes = get_num_classes(args)
 
     device = torch.device(args.device)
 
@@ -698,6 +702,9 @@ def build_dab_deformable_detr(args):
                     'loss_adj':args.adj_loss_coef, 
                    }
 
+    if getattr(args, 'no_grasps', False):
+        weight_dict = {k: v for k, v in weight_dict.items() if not k.startswith('loss_grasp_')}
+
     if args.aux_loss:
         aux_weight_dict = {}
         for i in range(args.dec_layers - 1):
@@ -706,6 +713,8 @@ def build_dab_deformable_detr(args):
         weight_dict.update(aux_weight_dict)
 
     losses = ['labels', 'boxes', 'grasp_class', 'grasp_bbox', 'grasp_angle', 'adj']
+    if getattr(args, 'no_grasps', False):
+        losses = ['labels', 'boxes', 'adj']
 
     criterion = SetCriterion(num_classes, weight_dict, losses, focal_alpha=args.focal_alpha, matcher = matcher, matcher_grasp = matcher_grasp)
     criterion.to(device)

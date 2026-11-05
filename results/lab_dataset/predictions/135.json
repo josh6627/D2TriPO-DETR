@@ -1,0 +1,116 @@
+{
+  "image": "135.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 211,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.806529,
+      "bbox_xyxy": [
+        287.97,
+        280.13,
+        353.95,
+        455.41
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 12,
+      "class_id": 20,
+      "class_name": "bottle",
+      "confidence": 0.75162,
+      "bbox_xyxy": [
+        94.52,
+        81.61,
+        242.47,
+        231.34
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 167,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.552469,
+      "bbox_xyxy": [
+        243.73,
+        64.08,
+        404.47,
+        254.49
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 17,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.477038,
+      "bbox_xyxy": [
+        185.15,
+        291.58,
+        279.65,
+        386.98
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

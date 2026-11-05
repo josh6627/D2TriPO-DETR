@@ -1,0 +1,85 @@
+{
+  "image": "214.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 260,
+      "class_id": 10,
+      "class_name": "pen",
+      "confidence": 0.968822,
+      "bbox_xyxy": [
+        151.28,
+        80.04,
+        215.21,
+        178.07
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 56,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.94182,
+      "bbox_xyxy": [
+        91.01,
+        189.08,
+        236.85,
+        368.9
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 187,
+      "class_id": 17,
+      "class_name": "cup",
+      "confidence": 0.484537,
+      "bbox_xyxy": [
+        270.43,
+        65.92,
+        419.2,
+        214.82
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

@@ -1,0 +1,390 @@
+{
+  "source": "https://github.com/maximiliangilles/MetaGraspNet/blob/master/models/ifl_labels.py",
+  "note": "Conservative category mapping. Unmatched categories use novel ID 31; no new class IDs are allocated.",
+  "categories": {
+    "1": {
+      "name": "sugar_box",
+      "vmrd_class": "box"
+    },
+    "2": {
+      "name": "tomato_soup_can",
+      "vmrd_class": "cans"
+    },
+    "3": {
+      "name": "mustard_bottle",
+      "vmrd_class": "bottle"
+    },
+    "4": {
+      "name": "potted_meat_can",
+      "vmrd_class": "cans"
+    },
+    "5": {
+      "name": "banana",
+      "vmrd_class": "banana"
+    },
+    "6": {
+      "name": "bowl",
+      "vmrd_class": "novel"
+    },
+    "7": {
+      "name": "mug",
+      "vmrd_class": "cup"
+    },
+    "8": {
+      "name": "power_drill",
+      "vmrd_class": "novel"
+    },
+    "9": {
+      "name": "scissor",
+      "vmrd_class": "novel"
+    },
+    "10": {
+      "name": "chips_can",
+      "vmrd_class": "cans"
+    },
+    "11": {
+      "name": "strawberry",
+      "vmrd_class": "novel"
+    },
+    "12": {
+      "name": "apple",
+      "vmrd_class": "apple"
+    },
+    "13": {
+      "name": "lemon",
+      "vmrd_class": "novel"
+    },
+    "14": {
+      "name": "peach",
+      "vmrd_class": "novel"
+    },
+    "15": {
+      "name": "pear",
+      "vmrd_class": "novel"
+    },
+    "16": {
+      "name": "orange",
+      "vmrd_class": "novel"
+    },
+    "17": {
+      "name": "plum",
+      "vmrd_class": "novel"
+    },
+    "18": {
+      "name": "knife",
+      "vmrd_class": "knife"
+    },
+    "19": {
+      "name": "phillips_screwdriver",
+      "vmrd_class": "screwdriver"
+    },
+    "20": {
+      "name": "flat_screwdriver",
+      "vmrd_class": "screwdriver"
+    },
+    "21": {
+      "name": "racquetball",
+      "vmrd_class": "novel"
+    },
+    "22": {
+      "name": "b_cups",
+      "vmrd_class": "cup"
+    },
+    "23": {
+      "name": "d_cups",
+      "vmrd_class": "cup"
+    },
+    "24": {
+      "name": "a_toy_airplane",
+      "vmrd_class": "novel"
+    },
+    "25": {
+      "name": "c_toy_airplane",
+      "vmrd_class": "novel"
+    },
+    "26": {
+      "name": "d_toy_airplane",
+      "vmrd_class": "novel"
+    },
+    "27": {
+      "name": "f_toy_airplane",
+      "vmrd_class": "novel"
+    },
+    "28": {
+      "name": "h_toy_airplane",
+      "vmrd_class": "novel"
+    },
+    "29": {
+      "name": "i_toy_airplane",
+      "vmrd_class": "novel"
+    },
+    "30": {
+      "name": "j_toy_airplane",
+      "vmrd_class": "novel"
+    },
+    "31": {
+      "name": "k_toy_airplane",
+      "vmrd_class": "novel"
+    },
+    "32": {
+      "name": "light_bulb",
+      "vmrd_class": "novel"
+    },
+    "34": {
+      "name": "kitchen_knife",
+      "vmrd_class": "knife"
+    },
+    "35": {
+      "name": "screw_valve",
+      "vmrd_class": "novel"
+    },
+    "36": {
+      "name": "plastic_pipes",
+      "vmrd_class": "novel"
+    },
+    "37": {
+      "name": "cables_in_transparent_bag",
+      "vmrd_class": "novel"
+    },
+    "38": {
+      "name": "cables",
+      "vmrd_class": "novel"
+    },
+    "39": {
+      "name": "wire_cutter",
+      "vmrd_class": "novel"
+    },
+    "40": {
+      "name": "desinfection",
+      "vmrd_class": "novel"
+    },
+    "41": {
+      "name": "hairspray",
+      "vmrd_class": "novel"
+    },
+    "42": {
+      "name": "handcream",
+      "vmrd_class": "novel"
+    },
+    "43": {
+      "name": "toothpaste",
+      "vmrd_class": "toothpaste"
+    },
+    "44": {
+      "name": "toydog",
+      "vmrd_class": "novel"
+    },
+    "45": {
+      "name": "sponge",
+      "vmrd_class": "novel"
+    },
+    "46": {
+      "name": "pneumatic_cylinder",
+      "vmrd_class": "novel"
+    },
+    "47": {
+      "name": "airfilter",
+      "vmrd_class": "novel"
+    },
+    "48": {
+      "name": "coffeefilter",
+      "vmrd_class": "novel"
+    },
+    "49": {
+      "name": "wash_glove",
+      "vmrd_class": "novel"
+    },
+    "50": {
+      "name": "wash_sponge",
+      "vmrd_class": "novel"
+    },
+    "51": {
+      "name": "garbage_bags",
+      "vmrd_class": "novel"
+    },
+    "52": {
+      "name": "deo",
+      "vmrd_class": "novel"
+    },
+    "53": {
+      "name": "cat_milk",
+      "vmrd_class": "novel"
+    },
+    "54": {
+      "name": "bottle_glass",
+      "vmrd_class": "bottle"
+    },
+    "55": {
+      "name": "bottle_press_head",
+      "vmrd_class": "bottle"
+    },
+    "56": {
+      "name": "shaving_cream",
+      "vmrd_class": "novel"
+    },
+    "57": {
+      "name": "chewing_gum_with_spray",
+      "vmrd_class": "novel"
+    },
+    "58": {
+      "name": "lighters",
+      "vmrd_class": "novel"
+    },
+    "59": {
+      "name": "cream_soap",
+      "vmrd_class": "novel"
+    },
+    "60": {
+      "name": "box_1",
+      "vmrd_class": "box"
+    },
+    "61": {
+      "name": "box_2",
+      "vmrd_class": "box"
+    },
+    "62": {
+      "name": "box_3",
+      "vmrd_class": "box"
+    },
+    "63": {
+      "name": "box_4",
+      "vmrd_class": "box"
+    },
+    "64": {
+      "name": "box_5",
+      "vmrd_class": "box"
+    },
+    "65": {
+      "name": "box_6",
+      "vmrd_class": "box"
+    },
+    "66": {
+      "name": "box_7",
+      "vmrd_class": "box"
+    },
+    "67": {
+      "name": "box_8",
+      "vmrd_class": "box"
+    },
+    "68": {
+      "name": "glass_cup",
+      "vmrd_class": "cup"
+    },
+    "69": {
+      "name": "tennis_ball",
+      "vmrd_class": "novel"
+    },
+    "70": {
+      "name": "cup",
+      "vmrd_class": "cup"
+    },
+    "71": {
+      "name": "wineglass",
+      "vmrd_class": "novel"
+    },
+    "72": {
+      "name": "handsaw",
+      "vmrd_class": "novel"
+    },
+    "73": {
+      "name": "lipcare",
+      "vmrd_class": "novel"
+    },
+    "74": {
+      "name": "woodcube_a",
+      "vmrd_class": "novel"
+    },
+    "75": {
+      "name": "lipstick",
+      "vmrd_class": "novel"
+    },
+    "76": {
+      "name": "nosespray",
+      "vmrd_class": "novel"
+    },
+    "77": {
+      "name": "tape",
+      "vmrd_class": "tape"
+    },
+    "78": {
+      "name": "bookholder",
+      "vmrd_class": "novel"
+    },
+    "79": {
+      "name": "clamp",
+      "vmrd_class": "novel"
+    },
+    "80": {
+      "name": "glue",
+      "vmrd_class": "novel"
+    },
+    "81": {
+      "name": "stapler",
+      "vmrd_class": "stapler"
+    },
+    "82": {
+      "name": "calculator",
+      "vmrd_class": "novel"
+    },
+    "83": {
+      "name": "clamp_small",
+      "vmrd_class": "novel"
+    },
+    "84": {
+      "name": "clamp_big",
+      "vmrd_class": "novel"
+    },
+    "85": {
+      "name": "glasses",
+      "vmrd_class": "glasses"
+    },
+    "86": {
+      "name": "crayons",
+      "vmrd_class": "novel"
+    },
+    "87": {
+      "name": "marker_big",
+      "vmrd_class": "pen"
+    },
+    "88": {
+      "name": "marker_small",
+      "vmrd_class": "pen"
+    },
+    "89": {
+      "name": "greek_busts",
+      "vmrd_class": "novel"
+    },
+    "90": {
+      "name": "object_wrapped_in_foil",
+      "vmrd_class": "novel"
+    },
+    "91": {
+      "name": "water_bottle_deformed",
+      "vmrd_class": "bottle"
+    },
+    "92": {
+      "name": "bubble_wrap",
+      "vmrd_class": "novel"
+    },
+    "93": {
+      "name": "woodblock_a",
+      "vmrd_class": "novel"
+    },
+    "94": {
+      "name": "woodblock_b",
+      "vmrd_class": "novel"
+    },
+    "95": {
+      "name": "woodblock_c",
+      "vmrd_class": "novel"
+    },
+    "96": {
+      "name": "mannequin",
+      "vmrd_class": "novel"
+    },
+    "97": {
+      "name": "cracker_box",
+      "vmrd_class": "box"
+    }
+  }
+}

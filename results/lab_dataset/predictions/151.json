@@ -1,0 +1,151 @@
+{
+  "image": "151.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 11,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.940074,
+      "bbox_xyxy": [
+        240.08,
+        46.48,
+        394.76,
+        182.77
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 244,
+      "class_id": 2,
+      "class_name": "pliers",
+      "confidence": 0.931615,
+      "bbox_xyxy": [
+        52.43,
+        81.5,
+        222.34,
+        271.8
+      ]
+    },
+    {
+      "id": 2,
+      "query_id": 53,
+      "class_id": 20,
+      "class_name": "bottle",
+      "confidence": 0.911605,
+      "bbox_xyxy": [
+        186.65,
+        244.96,
+        282.6,
+        336.33
+      ]
+    },
+    {
+      "id": 3,
+      "query_id": 211,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.755514,
+      "bbox_xyxy": [
+        286.81,
+        240.32,
+        380.93,
+        467.21
+      ]
+    },
+    {
+      "id": 4,
+      "query_id": 82,
+      "class_id": 20,
+      "class_name": "bottle",
+      "confidence": 0.415281,
+      "bbox_xyxy": [
+        52.98,
+        274.5,
+        202.24,
+        424.75
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [],
+  "contradictory_pairs": []
+}

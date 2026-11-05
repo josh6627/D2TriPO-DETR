@@ -14,10 +14,21 @@ import torch
 
 import util.misc as utils
 
-def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
-                    data_loader: Iterable, optimizer: torch.optim.Optimizer,
-                    device: torch.device, epoch: int, max_norm: float = 0, 
-                    wo_class_error=False, lr_scheduler=None, args=None, logger=None, ema_m=None):
+
+def train_one_epoch(
+    model: torch.nn.Module,
+    criterion: torch.nn.Module,
+    data_loader: Iterable,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    epoch: int,
+    max_norm: float = 0,
+    wo_class_error=False,
+    lr_scheduler=None,
+    args=None,
+    logger=None,
+    ema_m=None,
+):
     scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
 
     try:
@@ -28,20 +39,24 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     model.train()
     criterion.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
-    metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
+    metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value:.6f}"))
     if not wo_class_error:
-        metric_logger.add_meter('class_error', utils.SmoothedValue(window_size=1, fmt='{value:.2f}'))
-    header = 'Epoch: [{}]'.format(epoch)
+        metric_logger.add_meter(
+            "class_error", utils.SmoothedValue(window_size=1, fmt="{value:.2f}")
+        )
+    header = "Epoch: [{}]".format(epoch)
     print_freq = 10
 
     _cnt = 0
 
     if epoch < 20:
-         criterion.weight_dict['loss_adj'] = 0
+        criterion.weight_dict["loss_adj"] = 0
     else:
-        criterion.weight_dict['loss_adj'] = 1
+        criterion.weight_dict["loss_adj"] = 1
 
-    for samples, targets in metric_logger.log_every(data_loader, print_freq, header, logger=logger):
+    for samples, targets in metric_logger.log_every(
+        data_loader, print_freq, header, logger=logger
+    ):
 
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
@@ -51,16 +66,24 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                 outputs = model(samples, targets)
             else:
                 outputs = model(samples)
-        
+
             loss_dict = criterion(outputs, targets)
             weight_dict = criterion.weight_dict
-            losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
+            losses = sum(
+                loss_dict[k] * weight_dict[k]
+                for k in loss_dict.keys()
+                if k in weight_dict
+            )
 
         loss_dict_reduced = utils.reduce_dict(loss_dict)
-        loss_dict_reduced_unscaled = {f'{k}_unscaled': v
-                                      for k, v in loss_dict_reduced.items()}
-        loss_dict_reduced_scaled = {k: v * weight_dict[k]
-                                    for k, v in loss_dict_reduced.items() if k in weight_dict}
+        loss_dict_reduced_unscaled = {
+            f"{k}_unscaled": v for k, v in loss_dict_reduced.items()
+        }
+        loss_dict_reduced_scaled = {
+            k: v * weight_dict[k]
+            for k, v in loss_dict_reduced.items()
+            if k in weight_dict
+        }
         losses_reduced_scaled = sum(loss_dict_reduced_scaled.values())
 
         loss_value = losses_reduced_scaled.item()
@@ -70,8 +93,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             print(loss_dict_reduced)
             sys.exit(1)
 
+        optimizer.zero_grad()
         if args.amp:
-            optimizer.zero_grad()
             scaler.scale(losses).backward()
             if max_norm > 0:
                 scaler.unscale_(optimizer)
@@ -79,35 +102,47 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             scaler.step(optimizer)
             scaler.update()
         else:
-
             losses.backward()
             if max_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
             optimizer.step()
 
-
-        metric_logger.update(loss=loss_value, **loss_dict_reduced_scaled, **loss_dict_reduced_unscaled)
-        if 'class_error' in loss_dict_reduced:
-            metric_logger.update(class_error=loss_dict_reduced['class_error'])
+        metric_logger.update(
+            loss=loss_value, **loss_dict_reduced_scaled, **loss_dict_reduced_unscaled
+        )
+        if "class_error" in loss_dict_reduced:
+            metric_logger.update(class_error=loss_dict_reduced["class_error"])
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
         _cnt += 1
         if args.debug:
             if _cnt % 15 == 0:
-                print("BREAK!"*5)
+                print("BREAK!" * 5)
                 break
 
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-    resstat = {k: meter.global_avg for k, meter in metric_logger.meters.items() if meter.count > 0}
-    if getattr(criterion, 'loss_weight_decay', False):
-        resstat.update({f'weight_{k}': v for k,v in criterion.weight_dict.items()})
+    resstat = {
+        k: meter.global_avg
+        for k, meter in metric_logger.meters.items()
+        if meter.count > 0
+    }
+    if getattr(criterion, "loss_weight_decay", False):
+        resstat.update({f"weight_{k}": v for k, v in criterion.weight_dict.items()})
     return resstat
 
 
 @torch.no_grad()
-
-def evaluate(model, criterion, postprocessors, data_loader, device, wo_class_error=False, args = None, logger=None):
+def evaluate(
+    model,
+    criterion,
+    postprocessors,
+    data_loader,
+    device,
+    wo_class_error=False,
+    args=None,
+    logger=None,
+):
 
     try:
         need_tgt_for_training = args.use_dn
@@ -119,12 +154,16 @@ def evaluate(model, criterion, postprocessors, data_loader, device, wo_class_err
 
     metric_logger = utils.MetricLogger(delimiter="  ")
     if not wo_class_error:
-        metric_logger.add_meter('class_error', utils.SmoothedValue(window_size=1, fmt='{value:.2f}'))
-    header = 'Test:'
+        metric_logger.add_meter(
+            "class_error", utils.SmoothedValue(window_size=1, fmt="{value:.2f}")
+        )
+    header = "Test:"
 
     _cnt = 0
-    output_state_dict = {} 
-    for samples, targets in metric_logger.log_every(data_loader, 10, header, logger=logger):
+    output_state_dict = {}
+    for samples, targets in metric_logger.log_every(
+        data_loader, 10, header, logger=logger
+    ):
         samples = samples.to(device)
 
         targets = [{k: to_device(v, device) for k, v in t.items()} for t in targets]
@@ -139,27 +178,49 @@ def evaluate(model, criterion, postprocessors, data_loader, device, wo_class_err
         weight_dict = criterion.weight_dict
 
         loss_dict_reduced = utils.reduce_dict(loss_dict)
-        loss_dict_reduced_scaled = {k: v * weight_dict[k]
-                                    for k, v in loss_dict_reduced.items() if k in weight_dict}
-        loss_dict_reduced_unscaled = {f'{k}_unscaled': v
-                                      for k, v in loss_dict_reduced.items()}
-        metric_logger.update(loss=sum(loss_dict_reduced_scaled.values()),
-                             **loss_dict_reduced_scaled,
-                             **loss_dict_reduced_unscaled)
-        if 'class_error' in loss_dict_reduced:
-            metric_logger.update(class_error=loss_dict_reduced['class_error'])
+        loss_dict_reduced_scaled = {
+            k: v * weight_dict[k]
+            for k, v in loss_dict_reduced.items()
+            if k in weight_dict
+        }
+        loss_dict_reduced_unscaled = {
+            f"{k}_unscaled": v for k, v in loss_dict_reduced.items()
+        }
+        metric_logger.update(
+            loss=sum(loss_dict_reduced_scaled.values()),
+            **loss_dict_reduced_scaled,
+            **loss_dict_reduced_unscaled,
+        )
+        if "class_error" in loss_dict_reduced:
+            metric_logger.update(class_error=loss_dict_reduced["class_error"])
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
-        results = postprocessors['bbox'](outputs, orig_target_sizes)
+        results = postprocessors["bbox"](outputs, orig_target_sizes)
 
-        res = {target['image_id'].item(): output for target, output in zip(targets, results)}
+        res = {
+            target["image_id"].item(): output
+            for target, output in zip(targets, results)
+        }
+
+        if _cnt == 0:
+            for i, (target, result) in enumerate(zip(targets, results)):
+                gt_adj = target["adj"]
+                pred_adj = outputs["pred_adj"][i]
+                print("\n--- Relationship Evaluation Debug ---")
+                print("Image ID:", target["image_id"].item())
+                print("Number of GT objects:", len(target["labels"]))
+                print("GT adjacency shape:", gt_adj.shape)
+                print("Predicted adjacency shape:", pred_adj.shape)
+                print("Available detection fields:", result.keys())
 
         if args.save_results:
             """
             saving results of eval.
             """
 
-            for i, (tgt, res, outbbox) in enumerate(zip(targets, results, outputs['pred_boxes'])):
+            for i, (tgt, res, outbbox) in enumerate(
+                zip(targets, results, outputs["pred_boxes"])
+            ):
                 """
                 pred vars:
                     K: number of bbox pred
@@ -170,37 +231,44 @@ def evaluate(model, criterion, postprocessors, data_loader, device, wo_class_err
                 tgt: dict.
 
                 """
-                gt_bbox = tgt['boxes']
-                gt_label = tgt['labels']
+                gt_bbox = tgt["boxes"]
+                gt_label = tgt["labels"]
                 gt_info = torch.cat((gt_bbox, gt_label.unsqueeze(-1)), 1)
 
                 _res_bbox = outbbox
-                _res_prob = res['scores']
-                _res_label = res['labels']
-                res_info = torch.cat((_res_bbox, _res_prob.unsqueeze(-1), _res_label.unsqueeze(-1)), 1)
+                _res_prob = res["scores"]
+                _res_label = res["labels"]
+                res_info = torch.cat(
+                    (_res_bbox, _res_prob.unsqueeze(-1), _res_label.unsqueeze(-1)), 1
+                )
 
-                if 'gt_info' not in output_state_dict:
-                    output_state_dict['gt_info'] = []
-                output_state_dict['gt_info'].append(gt_info.cpu())
+                if "gt_info" not in output_state_dict:
+                    output_state_dict["gt_info"] = []
+                output_state_dict["gt_info"].append(gt_info.cpu())
 
-                if 'res_info' not in output_state_dict:
-                    output_state_dict['res_info'] = []
-                output_state_dict['res_info'].append(res_info.cpu())
+                if "res_info" not in output_state_dict:
+                    output_state_dict["res_info"] = []
+                output_state_dict["res_info"].append(res_info.cpu())
 
         _cnt += 1
         if args.debug:
             if _cnt % 15 == 0:
-                print("BREAK!"*5)
+                print("BREAK!" * 5)
                 break
 
     if args.save_results:
         import os.path as osp
-        savepath = osp.join(args.output_dir, 'results-{}.pkl'.format(utils.get_rank()))
+
+        savepath = osp.join(args.output_dir, "results-{}.pkl".format(utils.get_rank()))
         print("Saving res to {}".format(savepath))
         torch.save(output_state_dict, savepath)
 
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
 
-    stats = {k: meter.global_avg for k, meter in metric_logger.meters.items() if meter.count > 0}
+    stats = {
+        k: meter.global_avg
+        for k, meter in metric_logger.meters.items()
+        if meter.count > 0
+    }
     return stats

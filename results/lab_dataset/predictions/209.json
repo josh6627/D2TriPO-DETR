@@ -1,0 +1,68 @@
+{
+  "image": "209.png",
+  "width": 512,
+  "height": 512,
+  "object_score_threshold": 0.4,
+  "relationship_threshold": 0.5,
+  "note": "Predictions only; no ground truth or accuracy metrics",
+  "detections": [
+    {
+      "id": 0,
+      "query_id": 246,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.957415,
+      "bbox_xyxy": [
+        227.76,
+        310.59,
+        442.6,
+        490.99
+      ]
+    },
+    {
+      "id": 1,
+      "query_id": 107,
+      "class_id": 11,
+      "class_name": "box",
+      "confidence": 0.915752,
+      "bbox_xyxy": [
+        315.65,
+        152.96,
+        416.92,
+        304.26
+      ]
+    }
+  ],
+  "adjacency_binary": [
+    [
+      0,
+      1
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "adjacency_probabilities": [
+    [
+      0.0,
+      0.560179
+    ],
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "relationships": [
+    {
+      "above_id": 0,
+      "below_id": 1,
+      "above_query_id": 246,
+      "below_query_id": 107,
+      "above_class": "box",
+      "below_class": "box",
+      "confidence": 0.560179
+    }
+  ],
+  "contradictory_pairs": []
+}

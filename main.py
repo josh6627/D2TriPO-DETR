@@ -24,6 +24,7 @@ from datasets import build_dataset
 from engine import evaluate, train_one_epoch
 from models import build_DABDETR, build_dab_deformable_detr
 from util.utils import clean_state_dict
+from util.dataset_config import configure_classes, configure_tasks
 
 
 def get_args_parser():
@@ -160,6 +161,12 @@ def get_args_parser():
 
     # dataset parameters
     parser.add_argument('--dataset_file', default='vmrd')
+    parser.add_argument('--dataset_root', type=Path, default=None,
+                        help='Dataset with images/labels/adj/grasps train/val folders and optional classes.json')
+    parser.add_argument('--num_classes', type=int, default=None,
+                        help='Class channels; inferred from dataset classes.json, otherwise 32')
+    parser.add_argument('--no-grasps', action='store_true', default=None,
+                        help='Train boxes and relationships only; inferred automatically from labeler exports')
     parser.add_argument('--remove_difficult', action='store_true')
     parser.add_argument('--fix_size', action='store_true', 
                         help="Using for debug only. It will fix the size of input images to the maximum.")
@@ -199,11 +206,14 @@ def get_args_parser():
                         help="Train with mixed precision")
     parser.add_argument('--pred_train_dir', default=r'/home/root123/code/D2TriPO_DETR/resnet101_doubledetr.pth')
     parser.add_argument('--pred_train', default=True, type=bool)
+    parser.add_argument('--no-pred-train', dest='pred_train', action='store_false',
+                        help='Disable the legacy pred_train_dir checkpoint load')
 
     return parser
 
 
 def build_model_main(args):
+    configure_tasks(args)
     if args.modelname.lower() == 'dab_detr':
         model, criterion, postprocessors = build_DABDETR(args)
     elif args.modelname.lower() == 'dab_deformable_detr':
@@ -215,6 +225,11 @@ def build_model_main(args):
 
 def main(args):
 
+    configure_classes(args)
+    configure_tasks(args)
+    # Keep CLI settings JSON serializable in saved configs and checkpoints.
+    if args.dataset_root is not None:
+        args.dataset_root = str(args.dataset_root)
     utils.init_distributed_mode(args)
     os.makedirs(args.output_dir, exist_ok=True)
     os.environ['output_dir'] = args.output_dir
@@ -262,8 +277,8 @@ def main(args):
                                   weight_decay=args.weight_decay)
     
 
-    dataset_train = build_dataset(image_set='train')
-    dataset_val = build_dataset(image_set='val')
+    dataset_train = build_dataset(image_set='train', args=args)
+    dataset_val = build_dataset(image_set='val', args=args)
 
     if args.distributed:
         sampler_train = DistributedSampler(dataset_train)
@@ -333,7 +348,7 @@ def main(args):
 
         return
 
-    if args.pred_train:
+    if args.pred_train and not args.resume and not args.pretrain_model_path:
         checkpoint = torch.load(args.pred_train_dir, map_location='cpu')
 
         new_state_dict = {
