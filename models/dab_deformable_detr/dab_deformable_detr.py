@@ -16,6 +16,7 @@ import os
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch.utils.checkpoint import checkpoint
 import math
 
 from util import box_ops
@@ -175,6 +176,40 @@ class DABDeformableDETR(nn.Module):
             for box_embed in self.bbox_embed:
                 nn.init.constant_(box_embed.layers[-1].bias.data[2:], 0.0)
 
+    def _adjacency_logits(self, hidden, query, key, lvl):
+        """Compute pairwise relationships without changing checkpoint parameters."""
+        num_queries = hidden.shape[1]
+        decoder_outputs_adj_1 = self.adj1_linear[lvl](hidden).unsqueeze(2)
+        decoder_outputs_adj_2 = self.adj2_linear[lvl](hidden).unsqueeze(1)
+        decoder_outputs_adj_1 = decoder_outputs_adj_1.expand(-1, num_queries, num_queries, -1)
+        decoder_outputs_adj_2 = decoder_outputs_adj_2.expand(-1, num_queries, num_queries, -1)
+        decoder_outputs_adj = torch.cat((decoder_outputs_adj_1, decoder_outputs_adj_2), dim=-1)
+
+        decoder_outouts_query = self.adj_query[lvl](query).unsqueeze(2)
+        decoder_outouts_key = self.adj_key[lvl](key).unsqueeze(1)
+        decoder_outouts_query_boardcast = decoder_outouts_query.expand(-1, num_queries, num_queries, -1)
+        decoder_outouts_key_boardcast = decoder_outouts_key.expand(-1, num_queries, num_queries, -1)
+        decoder_outouts_query_key = torch.cat((decoder_outouts_query_boardcast, decoder_outouts_key_boardcast), dim=-1)
+
+        ga=self.WG[lvl](decoder_outouts_query_key).sigmoid()
+        gz=self.WG[lvl](decoder_outputs_adj).sigmoid()
+
+        output_adj_end = gz*decoder_outputs_adj + ga*decoder_outouts_query_key
+        outputs_adj = self.adj_embed[lvl](output_adj_end).squeeze(-1)
+        return outputs_adj
+
+    def _predict_adjacency(self, hidden, query, key, lvl):
+        # Each layer otherwise retains several B x Q x Q x 2D tensors until
+        # backward. Recompute these intermediates instead of saving all six
+        # layers' pairwise activations. Pass lvl explicitly so backward uses
+        # the correct layer after the decoder loop has finished.
+        if self.training and torch.is_grad_enabled():
+            return checkpoint(
+                self._adjacency_logits, hidden, query, key, lvl,
+                use_reentrant=False,
+            )
+        return self._adjacency_logits(hidden, query, key, lvl)
+
     def forward(self, samples: NestedTensor):
 
         if not isinstance(samples, NestedTensor):
@@ -254,23 +289,7 @@ class DABDeformableDETR(nn.Module):
                 tmp[..., :2] += reference
             outputs_coord = tmp.sigmoid()
 
-            decoder_outputs_adj_1 = self.adj1_linear[lvl](hs[lvl]).unsqueeze(2)
-            decoder_outputs_adj_2 = self.adj2_linear[lvl](hs[lvl]).unsqueeze(1)
-            decoder_outputs_adj_1 = decoder_outputs_adj_1.expand(-1, 300, 300, -1)
-            decoder_outputs_adj_2 = decoder_outputs_adj_2.expand(-1, 300, 300, -1)
-            decoder_outputs_adj = torch.cat((decoder_outputs_adj_1, decoder_outputs_adj_2), dim=-1)
-
-            decoder_outouts_query = self.adj_query[lvl](q[lvl]).unsqueeze(2)
-            decoder_outouts_key = self.adj_key[lvl](k[lvl]).unsqueeze(1)
-            decoder_outouts_query_boardcast = decoder_outouts_query.expand(-1, 300, 300, -1)
-            decoder_outouts_key_boardcast = decoder_outouts_key.expand(-1, 300, 300, -1)
-            decoder_outouts_query_key = torch.cat((decoder_outouts_query_boardcast, decoder_outouts_key_boardcast), dim=-1)
-
-            ga=self.WG[lvl](decoder_outouts_query_key).sigmoid()
-            gz=self.WG[lvl](decoder_outputs_adj).sigmoid()
-
-            output_adj_end = gz*decoder_outputs_adj + ga*decoder_outouts_query_key
-            outputs_adj = self.adj_embed[lvl](output_adj_end).squeeze(-1)
+            outputs_adj = self._predict_adjacency(hs[lvl], q[lvl], k[lvl], lvl)
 
             outputs_classes.append(outputs_class)
             outputs_coords.append(outputs_coord)

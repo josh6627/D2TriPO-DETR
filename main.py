@@ -25,6 +25,7 @@ from engine import evaluate, train_one_epoch
 from models import build_DABDETR, build_dab_deformable_detr
 from util.utils import clean_state_dict
 from util.dataset_config import configure_classes, configure_tasks
+from util.training_state import restore_training_state
 
 
 def get_args_parser():
@@ -179,6 +180,8 @@ def get_args_parser():
     parser.add_argument('--device', default='cuda', help='device to use for training / testing')
     parser.add_argument('--seed', default=42, type=int)
     parser.add_argument('--resume', default='', help='resume from checkpoint')
+    parser.add_argument('--resume_reset_lr', action='store_true',
+                        help='On resume, use configured learning rates and restart the lr_drop interval; retain optimizer history and epoch count')
     parser.add_argument('--pretrain_model_path', help='load from other checkpoint')
     parser.add_argument('--finetune_ignore', type=str, nargs='+', 
                         help="A list of keywords to ignore when loading pretrained models.")
@@ -311,11 +314,11 @@ def main(args):
         model_without_ddp.load_state_dict(checkpoint['model'],strict=False)
 
         if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = 1e-6
-            lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-            args.start_epoch = checkpoint['epoch'] + 1
+            args.start_epoch = restore_training_state(
+                optimizer, lr_scheduler, checkpoint, reset_lr=args.resume_reset_lr)
+            logger.info('Resuming at epoch %s with learning rates %s and lr_drop=%s',
+                        args.start_epoch, [group['lr'] for group in optimizer.param_groups],
+                        lr_scheduler.step_size)
 
 
     if not args.resume and args.pretrain_model_path:
@@ -373,6 +376,7 @@ def main(args):
         train_stats = train_one_epoch(
             model, criterion, data_loader_train, optimizer, device, epoch,
             args.clip_max_norm, wo_class_error=wo_class_error, lr_scheduler=lr_scheduler, args=args, logger=(logger if args.save_log else None))
+        lr_scheduler.step()
         if args.output_dir:
             checkpoint_paths = [output_dir / 'checkpoint.pth']
 
@@ -382,11 +386,10 @@ def main(args):
                     'model': model_without_ddp.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'lr_scheduler': lr_scheduler.state_dict(),
+                    'lr_scheduler_stepped': True,
                     'epoch': epoch,
                     'args': args,
                 }, checkpoint_path)
-
-        lr_scheduler.step()
 
         test_stats= evaluate(
             model, criterion, postprocessors, data_loader_val, device,

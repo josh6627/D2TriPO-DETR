@@ -17,6 +17,7 @@ from util.box_ops import box_xyxy_to_cxcywh
 from util.misc import interpolate
 import math
 
+
 def angle_between_points(x1, y1, x2, y2):
     delta_x = x2 - x1
     delta_y = y2 - y1
@@ -31,6 +32,7 @@ def angle_between_points(x1, y1, x2, y2):
 
     return angle
 
+
 def calculate_angle(grasp_points):
     angles = []
     for points in grasp_points:
@@ -44,6 +46,7 @@ def calculate_angle(grasp_points):
         angles.append(angle)
 
     return angles
+
 
 def crop(image, target, region):
     cropped_image = F.crop(image, *region)
@@ -67,15 +70,15 @@ def crop(image, target, region):
         fields.append("boxes")
 
     if "masks" in target:
-        target['masks'] = target['masks'][:, i:i + h, j:j + w]
+        target["masks"] = target["masks"][:, i : i + h, j : j + w]
         fields.append("masks")
 
     if "boxes" in target or "masks" in target:
         if "boxes" in target:
-            cropped_boxes = target['boxes'].reshape(-1, 2, 2)
+            cropped_boxes = target["boxes"].reshape(-1, 2, 2)
             keep = torch.all(cropped_boxes[:, 1, :] > cropped_boxes[:, 0, :], dim=1)
         else:
-            keep = target['masks'].flatten(1).any(1)
+            keep = target["masks"].flatten(1).any(1)
 
         for field in fields:
             target[field] = target[field][keep]
@@ -91,21 +94,24 @@ def hflip(image, target):
     target = target.copy()
     if "boxes" in target:
         boxes = target["boxes"]
-        boxes = boxes[:, [2, 1, 0, 3]] * torch.as_tensor([-1, 1, -1, 1]) + torch.as_tensor([w, 0, w, 0])
+        boxes = boxes[:, [2, 1, 0, 3]] * torch.as_tensor(
+            [-1, 1, -1, 1]
+        ) + torch.as_tensor([w, 0, w, 0])
         target["boxes"] = boxes
 
     if "grasp_points" in target:
         points = target["grasp_points"]
-        points = points * torch.as_tensor([-1,1])+torch.as_tensor([w,0])
+        points = points * torch.as_tensor([-1, 1]) + torch.as_tensor([w, 0])
         target["grasp_points"] = points
 
     if "masks" in target:
-        target['masks'] = target['masks'].flip(-1)
+        target["masks"] = target["masks"].flip(-1)
 
-    angles = calculate_angle(target['grasp_points'])
-    target['grasp_angles'] = torch.tensor(angles)
+    angles = calculate_angle(target["grasp_points"])
+    target["grasp_angles"] = torch.tensor(angles)
 
     return flipped_image, target
+
 
 def vflip(image, target):
     flipped_image = F.vflip(image)
@@ -115,7 +121,9 @@ def vflip(image, target):
     target = target.copy()
     if "boxes" in target:
         boxes = target["boxes"]
-        boxes = boxes[:, [0, 3, 2, 1]] * torch.as_tensor([1, -1, 1, -1]) + torch.as_tensor([0, h, 0, h])
+        boxes = boxes[:, [0, 3, 2, 1]] * torch.as_tensor(
+            [1, -1, 1, -1]
+        ) + torch.as_tensor([0, h, 0, h])
         target["boxes"] = boxes
 
     if "grasp_points" in target:
@@ -124,12 +132,13 @@ def vflip(image, target):
         target["grasp_points"] = points
 
     if "masks" in target:
-        target['masks'] = target['masks'].flip(-2)
+        target["masks"] = target["masks"].flip(-2)
 
-    angles = calculate_angle(target['grasp_points'])
-    target['grasp_angles'] = torch.tensor(angles)
+    angles = calculate_angle(target["grasp_points"])
+    target["grasp_angles"] = torch.tensor(angles)
 
     return flipped_image, target
+
 
 def resize(image, target, size, max_size=None):
 
@@ -165,18 +174,24 @@ def resize(image, target, size, max_size=None):
     if target is None:
         return rescaled_image, None
 
-    ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(rescaled_image.size, image.size))
+    ratios = tuple(
+        float(s) / float(s_orig) for s, s_orig in zip(rescaled_image.size, image.size)
+    )
     ratio_width, ratio_height = ratios
 
     target = target.copy()
     if "boxes" in target:
         boxes = target["boxes"]
-        scaled_boxes = boxes * torch.as_tensor([ratio_width, ratio_height, ratio_width, ratio_height])
+        scaled_boxes = boxes * torch.as_tensor(
+            [ratio_width, ratio_height, ratio_width, ratio_height]
+        )
         target["boxes"] = scaled_boxes
 
     if "grasp_points" in target:
         grasp_points = target["grasp_points"]
-        scaled_grasp_points = grasp_points * torch.as_tensor([ratio_width, ratio_height])
+        scaled_grasp_points = grasp_points * torch.as_tensor(
+            [ratio_width, ratio_height]
+        )
         target["grasp_points"] = scaled_grasp_points
 
     if "area" in target:
@@ -188,8 +203,10 @@ def resize(image, target, size, max_size=None):
     target["size"] = torch.tensor([h, w])
 
     if "masks" in target:
-        target['masks'] = interpolate(
-            target['masks'][:, None].float(), size, mode="nearest")[:, 0] > 0.5
+        target["masks"] = (
+            interpolate(target["masks"][:, None].float(), size, mode="bicubic")[:, 0]
+            > 0.5
+        )
 
     return rescaled_image, target
 
@@ -201,7 +218,9 @@ def pad(image, target, padding):
     target = target.copy()
     target["size"] = torch.tensor(padded_image.size[::-1])
     if "masks" in target:
-        target['masks'] = torch.nn.functional.pad(target['masks'], (0, padding[0], 0, padding[1]))
+        target["masks"] = torch.nn.functional.pad(
+            target["masks"], (0, padding[0], 0, padding[1])
+        )
     return padded_image, target
 
 
@@ -241,8 +260,8 @@ class CenterCrop(object):
     def __call__(self, img, target):
         image_width, image_height = img.size
         crop_height, crop_width = self.size
-        crop_top = int(round((image_height - crop_height) / 2.))
-        crop_left = int(round((image_width - crop_width) / 2.))
+        crop_top = int(round((image_height - crop_height) / 2.0))
+        crop_left = int(round((image_width - crop_width) / 2.0))
         return crop(img, target, (crop_top, crop_left, crop_height, crop_width))
 
 
@@ -255,6 +274,7 @@ class RandomHorizontalFlip(object):
             return hflip(img, target)
         return img, target
 
+
 class RandomVerticalFlip(object):
     def __init__(self, p=0.5):
         self.p = p
@@ -263,7 +283,8 @@ class RandomVerticalFlip(object):
         if random.random() < self.p:
             return vflip(img, target)
         return img, target
-    
+
+
 class RandomResize(object):
     def __init__(self, sizes, max_size=None):
         assert isinstance(sizes, (list, tuple))
@@ -325,24 +346,25 @@ class Normalize(object):
         h, w = image.shape[-2:]
 
         if "grasp_points" in target:
-            points = target['grasp_points']
+            points = target["grasp_points"]
             points = points / torch.tensor([w, h], dtype=torch.float32)
-            distance= self.calculate_euclidean_distance(points)
-            target['grasp_widths']=distance[:, 0]
-            target['grasp_heights']=distance[:, 1]
-            target['grasp_points'] = points
-
+            distance = self.calculate_euclidean_distance(points)
+            target["grasp_widths"] = distance[:, 0]
+            target["grasp_heights"] = distance[:, 1]
+            target["grasp_points"] = points
 
         if "boxes" in target:
             boxes = target["boxes"]
             boxes = box_xyxy_to_cxcywh(boxes)
             boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
-            target["boxes"] = boxes 
+            target["boxes"] = boxes
         return image, target
-    
+
     def calculate_euclidean_distance(self, points):
 
-        distances = torch.sqrt(torch.sum((points - torch.roll(points, shifts=-1, dims=1)) ** 2, dim=-1))
+        distances = torch.sqrt(
+            torch.sum((points - torch.roll(points, shifts=-1, dims=1)) ** 2, dim=-1)
+        )
         return distances
 
 

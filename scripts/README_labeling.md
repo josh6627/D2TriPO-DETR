@@ -9,11 +9,8 @@ python scripts/label_dataset.py
 
 This opens a local Tk desktop app using Pillow. It needs no model, GPU, server,
 or network connection. The existing `d2tripo` environment contains Tk and Pillow.
-On Linux, if its Tk build only supports bitmap fonts, the launcher checks
-`/usr/bin/python3` for Tk, Pillow, and scalable fonts and uses that renderer
-automatically. Project paths and command options are preserved. The training
-environment is unchanged. You can also launch directly with
-`/usr/bin/python3 scripts/label_dataset.py --no-grasps` on this machine.
+The app uses the Python/Tk environment you launch it with; it does not switch
+interpreters or renderers automatically.
 Run it from a graphical desktop (or SSH with X forwarding). A display connection
 is required; `--export` works without a display. For another environment, install
 Pillow and the Python Tk bindings supplied by your Python distribution.
@@ -31,7 +28,7 @@ Launch with:
 python scripts/label_dataset.py --no-grasps
 ```
 
-Or uncheck **Require grasps for completion** in the **Grasps** tab. This setting
+Or uncheck **Require grasps for completion** at the top of the sidebar. This setting
 applies to the whole project and persists when reopening. You can mark images
 complete using object boxes and reviewed relationships alone. If no objects
 overlap, leave relationships empty and check **Relationships reviewed**; export
@@ -55,18 +52,33 @@ to a new directory after changing the mode.
 
 ## Label an image
 
-The workspace has tools above the image and an inspector with **Objects**,
-**Relations**, and **Grasps** tabs. Progress is shown in the header.
+The classic layout has navigation and completion buttons at the top, the image
+on the left, and all labeling controls in one scrollable sidebar on the right.
 
-Type part of a name in the search field in **Objects** to filter the class picker
+Type part of a name in **Search object classes** to filter the class picker
 (case insensitive). The first match is selected automatically; use the picker
 for other matches, or press Enter/Down from the search box to open it. **Clear**
 shows all classes again. This also searches custom classes without changing IDs.
 
-Text defaults to 14 points, with larger section headings and canvas labels.
-Help and status text use the same readable size, with higher-contrast colors.
-For larger text, launch with `--font-size 16`. The controls panel has a vertical
+Text defaults to 16 points, with larger section headings and canvas labels.
+The original native theme and fonts are retained.
+For larger text, launch with `--font-size 18`. The controls panel has a vertical
 scrollbar so all actions stay accessible with larger fonts or smaller windows.
+
+The background image is cached during selection and annotation edits. Zoom is
+limited to 8 million displayed pixels and 8,192 pixels per side to bound memory
+use; original image pixels and exported coordinates are unchanged. On 1920×1080
+images this limits zoom to about 196%. Undo retains the last 100 edits per image.
+Drag previews reuse a single solid outline and coalesce pointer movements to
+about 30 frames per second. Release always saves the current mouse position,
+independently of the last preview frame. Cancel, image changes, zoom, and closing
+the app cancel pending preview callbacks. Unchanged test-progress text and
+cursors are not rewritten during ordinary pointer motion or selection.
+
+A rotating diagnostic log is saved as `labeler.log` beside `project.json`.
+It records image loads, selections, resizes, zooms, and callback errors; it keeps
+up to three files of 2 MiB each. Override its location with `--log-file PATH`.
+See [freeze investigation](LABELER_FREEZE_DIAGNOSIS.md) for the November 6 findings.
 
 Switch tools with **S** (select/resize), **B** (new box), **R** (redraw selected
 box), and **G** (new grasp). Switching cancels an unfinished shape or resize.
@@ -74,13 +86,13 @@ Shortcuts are inactive while typing in search fields, dropdowns, or dialogs;
 click the image to return keyboard focus to labeling.
 
 The **Confirm relationships** button beside **Mark complete** checks and saves
-the same review flag as **Relationships reviewed** in the **Relations** tab, including
+the same review flag as **Relationships reviewed** in the sidebar, including
 scenes with no relationships. Its text changes to **Relationships confirmed**.
 
-1. Choose a class, select **Box [B]**, and drag a tight axis-aligned box around
+1. Choose a class, select **New box [B]**, and drag a tight axis-aligned box around
    each object. **Add class** appends a new named class immediately. Use the
    object list or **Select [S]** to select an existing box; repeated clicks
-   cycle overlapping boxes. Change its class with **Apply to selected**, or use
+   cycle overlapping boxes. Change its class with **Apply class to selected object**, or use
    **Redraw [R]** to replace its bounds.
    In **Select [S]** mode, click a box, then drag any of its four
    sides or square midpoint handles to resize it. The opposite side stays fixed;
@@ -110,15 +122,48 @@ an existing class ID. Deleting an object removes its grasps and relationships.
 
 ## Export
 
-**Export dataset** asks for a parent folder and a new dataset folder name.
-At least two completed images are required. Export validates all completed
-samples, copies RGB images into a portable dataset, and creates a deterministic
-80/20 train/validation split. Existing output directories are never overwritten.
-Re-export to a new folder after edits. CLI export supports another split/seed:
+For multiple exports or mixing lab images with VMRD, use the
+[dataset merge script](README_merge_datasets.md). It reconciles classes by name
+and gives each output sample a unique numeric filename.
+
+Choose test images using **Use this image for TEST** above the image. The
+choice is saved immediately, independently of annotation completion and undo.
+Marked images show `[TEST]` in the image dropdown. You can plan test selections
+before labeling; only completed images count toward an export.
+
+The live counter shows the percentage of **completed images** assigned to test,
+the target count, and whether more or fewer selections are needed. It turns green
+and says **TEST TARGET REACHED** at the desired count. It also shows the number
+marked across the whole project, including unfinished images. The target updates
+as more images become complete. The labeler never chooses test images randomly.
+
+Defaults are **70% training, 10% validation, 20% test**. For 100 completed images,
+choose 20 for test; the other 80 are randomly split into 70 train and 10 val.
+Use **Split ratios...** to edit the three percentages; settings persist in the
+project. Counts round to the nearest whole image (half up), with at least one
+image in each split. Very small exports can therefore differ from the requested
+percentages. The counter's target count is authoritative.
+
+**Export completed** asks for a parent folder and a new dataset folder name.
+At least **three** completed images are required, and the number of completed
+test selections must match the displayed target. Export validates every sample
+and writes `train`, `val`, and `test` folders. Test membership is exactly your
+selection. Training/validation membership is shuffled with seed 42 by default,
+so repeated exports of the same completed images and choices are reproducible.
+Existing output directories are never overwritten; choose a new folder after
+edits. Existing projects receive the new defaults without changing annotations.
+
+CLI export uses the saved test choices and split ratios:
 
 ```bash
-python scripts/label_dataset.py --export data/topdown_labeled --val-fraction 0.2 --seed 42
+python scripts/label_dataset.py --export data/topdown_labeled_v2 --seed 42
 ```
+
+CLI ratio overrides can also be saved with `--val-fraction 0.1 --test-fraction 0.2`;
+the training fraction is the remainder. `manifest.json` records requested
+fractions and actual split counts. Training continues to use only `train` and
+`val`; test stays held out. The dataset builder supports `build_dataset('test',
+args=...)` with evaluation transforms for later testing.
 
 Custom input/project:
 
@@ -126,8 +171,8 @@ Custom input/project:
 python scripts/label_dataset.py --images path/to/images --project path/to/project.json
 ```
 
-The output contains `images`, `labels`, `adj`, and `grasps`, each with `train`
-and `val` folders. Numeric output filenames satisfy the loader's integer image
+The output contains `images`, `labels`, `adj`, and `grasps`, each with `train`,
+`val`, and `test` folders. Numeric output filenames satisfy the loader's integer image
 ID requirement; `manifest.json` maps them back to source filenames and instance
 IDs. `classes.json` is an ordered JSON list, where position is semantic class ID.
 The app preserves VMRD's 31 names at IDs **0–30**. New names start at **31**, then

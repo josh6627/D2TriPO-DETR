@@ -237,16 +237,16 @@ def draw_arrow(draw, src_xy, dst_xy):
     inset = min(24, distance / 4)
     start = (sx + ux * inset, sy + uy * inset)
     end = (dx - ux * inset, dy - uy * inset)
-    color = (255, 210, 50)
-    draw.line([start, end], fill=color, width=4)
-    length, half_width = 13, 6
+    color = (255, 255, 0)
+    draw.line([start, end], fill=color, width=5)
+    length, half_width = 16, 8
     base = (end[0] - ux * length, end[1] - uy * length)
     left = (base[0] - uy * half_width, base[1] + ux * half_width)
     right = (base[0] + uy * half_width, base[1] - ux * half_width)
     draw.polygon([end, left, right], fill=color)
 
 
-def visualize(image, detections, relationships, with_arrows):
+def visualize(image, detections, relationships, with_arrows, font=None):
     canvas = image.copy().convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
@@ -262,14 +262,17 @@ def visualize(image, detections, relationships, with_arrows):
         x1, y1, x2, y2 = det["bbox_xyxy"]
         draw.rectangle((x1, y1, x2, y2), outline=color, width=3)
         label = f'{i}: {det["class_name"]} {det["confidence"]:.2f}'
-        text_bbox = draw.textbbox((0, 0), label)
+        text_bbox = draw.textbbox((0, 0), label, font=font)
         text_w = text_bbox[2] - text_bbox[0]
         text_h = text_bbox[3] - text_bbox[1]
         label_y = max(0, y1 - text_h - 6)
         draw.rectangle(
             (x1, label_y, x1 + text_w + 8, label_y + text_h + 6), fill=(0, 0, 0)
         )
-        draw.text((x1 + 4, label_y + 3), label, fill=color)
+        draw.text(
+            (x1 + 4 - text_bbox[0], label_y + 3 - text_bbox[1]),
+            label, fill=color, font=font,
+        )
     return canvas
 
 

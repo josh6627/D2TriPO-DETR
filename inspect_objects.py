@@ -5,6 +5,7 @@ from torchvision import transforms
 from pathlib import Path
 from scipy.optimize import linear_sum_assignment
 from util.box_ops import box_cxcywh_to_xyxy, box_iou
+from util.dataset_config import class_id_mapping
 
 from models import build_dab_deformable_detr
 
@@ -185,11 +186,27 @@ def evaluate_one_image(image_path, model, return_predictions=False):
         "screwdriver",
         "notebook",
         "stapler",
-        "scissors",
-        "drill",
-        "bowl",
+        "plate",
+        "ball",
+        "lego",
+        "fruit",
         "clamp",
         "squeeze bottle",
+        "lid",
+        "tool",
+        "bowl",
+        "lock",
+        "pitcher",
+        "scissors",
+        "drill",
+        "usb",
+        "key",
+        "button",
+        "id",
+        "ruler",
+        "3dprint",
+        "wood",
+        "cap",
     ]
 
     class_names = getattr(model, "class_names", None) or class_names
@@ -197,7 +214,7 @@ def evaluate_one_image(image_path, model, return_predictions=False):
     probabilities = outputs["pred_logits"][0].sigmoid()
     num_classes = probabilities.shape[1]
 
-    scores, indices = torch.topk(probabilities.flatten(), 100)
+    scores, indices = torch.topk(probabilities.flatten(), min(100, probabilities.numel()))
     keep = scores > 0.4
 
     print("\n=== Object predictions above 0.4 ===")
@@ -221,7 +238,8 @@ def evaluate_one_image(image_path, model, return_predictions=False):
     W, H = image.size
 
     # Determine the annotation path from the input image path
-    image_file = Path(image_path).resolve()
+    # Follow the dataset layout, not an image symlink's target in a raw folder.
+    image_file = Path(image_path).absolute()
     gt_objects = []
 
     # Expected VMRD structure: images/<split>/<image_id>.jpg
@@ -231,6 +249,7 @@ def evaluate_one_image(image_path, model, return_predictions=False):
         dataset_root = image_file.parent.parent.parent
 
         label_path = dataset_root / "labels" / split / f"{image_id}.txt"
+        id_mapping = class_id_mapping(dataset_root, class_names[:num_classes])
 
         if label_path.exists():
             print("Ground-truth file:", label_path)
@@ -238,10 +257,19 @@ def evaluate_one_image(image_path, model, return_predictions=False):
             with open(label_path) as f:
                 for line in f:
                     parts = line.split()
+                    if not parts:
+                        continue
+                    source_class_id = int(parts[0])
+                    if id_mapping is not None and source_class_id not in id_mapping:
+                        raise ValueError(
+                            f"{label_path}: class ID {source_class_id} has no matching class in the checkpoint"
+                        )
+                    class_id = (id_mapping[source_class_id] if id_mapping is not None
+                                else source_class_id)
 
                     gt_objects.append(
                         {
-                            "class_id": int(parts[0]),
+                            "class_id": class_id,
                             "box": [float(v) for v in parts[1:5]],
                         }
                     )
@@ -283,6 +311,11 @@ def evaluate_one_image(image_path, model, return_predictions=False):
             [[int(value) for value in line.split()] for line in f if line.strip()],
             dtype=torch.int64,
         )
+    expected_shape = (len(gt_objects), len(gt_objects))
+    if tuple(gt_adj.shape) != expected_shape:
+        raise ValueError(f"{adj_path}: expected adjacency shape {expected_shape}, got {tuple(gt_adj.shape)}")
+    if not torch.all((gt_adj == 0) | (gt_adj == 1)) or torch.any(gt_adj.diagonal() != 0):
+        raise ValueError(f"{adj_path}: adjacency must be binary with a zero diagonal")
 
     print("Ground-truth adjacency file:", adj_path)
 
@@ -333,44 +366,6 @@ def evaluate_one_image(image_path, model, return_predictions=False):
 
     print("\nPredicted relationships among matched objects:")
     print(pred_subset.tolist())
-
-    #
-    #
-    #
-    #
-    #
-
-    # Lower notebook is ground-truth object 0
-    missing_gt_box = torch.tensor([gt_objects[0]["box"]], dtype=torch.float32)
-
-    # Convert all 300 predicted boxes to pixel xyxy coordinates
-    all_pred_boxes = box_cxcywh_to_xyxy(outputs["pred_boxes"][0].detach().cpu())
-
-    all_pred_boxes *= torch.tensor([W, H, W, H])
-
-    # Compare the lower notebook with every prediction query
-    ious, _ = box_iou(missing_gt_box, all_pred_boxes)
-
-    best_ious, best_query_ids = torch.topk(ious[0], 5)
-
-    print("\n=== Missing Lower Notebook Investigation ===")
-
-    for iou, query_id in zip(best_ious, best_query_ids):
-        q = int(query_id)
-
-        confidence, predicted_class = probabilities[q].max(dim=0)
-
-        print(
-            f"Query {q}: "
-            f"IoU={iou.item():.3f}, "
-            f"Class={int(predicted_class)}, "
-            f"Confidence={confidence.item():.3f}, "
-            f"Notebook confidence={probabilities[q, 29].item():.3f}"
-        )
-    #
-    #
-    #
-    #
 
     # Number of annotated and extra predicted objects
     n_gt = len(gt_objects)
@@ -459,8 +454,14 @@ def evaluate_one_image(image_path, model, return_predictions=False):
         from infer_unlabeled_dataset import decode_predictions
 
         result["prediction"] = decode_predictions(
-            outputs, W, H, score_threshold=0.4, relation_threshold=0.5,
-            topk=100, class_names=class_names)
+            outputs,
+            W,
+            H,
+            score_threshold=0.4,
+            relation_threshold=0.5,
+            topk=100,
+            class_names=class_names,
+        )
     return result
 
 

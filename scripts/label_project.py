@@ -11,6 +11,18 @@ except ImportError:
     from convert_vmrd import CLASSES
 
 EXTENSIONS = {'.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp'}
+SPLITS = ('train', 'val', 'test')
+
+
+def split_fractions(val_fraction=.1, test_fraction=.2):
+    if (not all(math.isfinite(v) and 0 < v < 1 for v in (val_fraction, test_fraction))
+            or val_fraction+test_fraction >= 1):
+        raise ValueError('Train, validation, and test fractions must be positive and sum to one.')
+    return {'train': 1-val_fraction-test_fraction, 'val': val_fraction, 'test': test_fraction}
+
+
+def test_target(total, fraction):
+    return max(1, math.floor(total*fraction+.5)) if total else 0
 
 
 def atomic_json(path, value):
@@ -98,6 +110,8 @@ class Project:
             self.data = {'version': 1, 'image_root': str(self.images),
                          'classes': list(CLASSES), 'samples': {}}
         self.data.setdefault('require_grasps', True)
+        self.data.setdefault('split_fractions', split_fractions())
+        self.data.setdefault('test_images', [])
         if require_grasps is not None:
             self.set_require_grasps(require_grasps)
 
@@ -126,6 +140,28 @@ class Project:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         atomic_json(self.path, self.data)
 
+    def set_split_fractions(self, val_fraction, test_fraction):
+        self.data['split_fractions'] = split_fractions(val_fraction, test_fraction)
+        self.save()
+
+    def set_test_image(self, name, selected):
+        if name not in self.files:
+            raise ValueError(f'Unknown image: {name}')
+        names = set(self.data['test_images'])
+        names.add(name) if selected else names.discard(name)
+        self.data['test_images'] = sorted(names)
+        self.save()
+
+    def test_progress(self, fraction=None):
+        complete = [n for n in self.files if self.sample(n).get('complete')]
+        chosen = set(self.data['test_images'])
+        fraction = self.data['split_fractions']['test'] if fraction is None else fraction
+        selected = sum(n in chosen for n in complete)
+        return {'completed': len(complete), 'selected': selected,
+                'target': test_target(len(complete), fraction), 'fraction': fraction,
+                'percentage': 100*selected/len(complete) if complete else 0,
+                'planned': sum(n in chosen for n in self.files)}
+
     def add_class(self, name):
         name = name.strip()
         if not name or name.casefold() in {c.casefold() for c in self.classes}:
@@ -134,16 +170,25 @@ class Project:
         self.save()
         return len(self.classes)-1
 
-    def export(self, output, val_fraction=0.2, seed=42):
+    def export(self, output, val_fraction=None, seed=42, test_fraction=None):
         from PIL import Image
         output = Path(output).resolve()
         if output.exists():
             raise ValueError('Choose a new export directory; existing exports are never overwritten.')
-        if not 0 < val_fraction < 1:
-            raise ValueError('Validation fraction must be between zero and one.')
+        settings = self.data['split_fractions']
+        fractions = split_fractions(settings['val'] if val_fraction is None else val_fraction,
+                                    settings['test'] if test_fraction is None else test_fraction)
         names = [n for n in self.files if self.sample(n).get('complete')]
-        if len(names) < 2:
-            raise ValueError('Mark at least two images complete for train/validation export.')
+        if len(names) < 3:
+            raise ValueError('Mark at least three images complete for train/validation/test export.')
+        test_names = set(self.data['test_images']) & set(names)
+        target = test_target(len(names), fractions['test'])
+        if len(test_names) != target:
+            raise ValueError(f'Choose exactly {target} completed test images for the '
+                             f'{fractions["test"]:.0%} target ({len(names)} completed images); '
+                             f'currently selected {len(test_names)}. Test images are never chosen automatically.')
+        if len(names)-len(test_names) < 2:
+            raise ValueError('Leave at least two completed images outside test for training and validation.')
         sizes = {}
         for name in names:
             with Image.open(self.images / name) as im:
@@ -153,23 +198,27 @@ class Project:
                          require_grasps=self.require_grasps)
             except ValueError as exc:
                 raise ValueError(f'{name}: {exc}') from exc
-        shuffled = names.copy()
+        shuffled = [n for n in names if n not in test_names]
         random.Random(seed).shuffle(shuffled)
-        val_names = set(shuffled[:max(1, min(len(names)-1, round(len(names)*val_fraction)))])
+        val_count = max(1, min(len(shuffled)-1, math.floor(len(names)*fractions['val']+.5)))
+        val_names = set(shuffled[:val_count])
+        counts = {'train': len(shuffled)-val_count, 'val': val_count, 'test': len(test_names)}
         manifest = {'version': 1, 'source': str(self.path), 'seed': seed,
-                    'val_fraction': val_fraction, 'tasks': {'grasps': self.require_grasps}, 'samples': {}}
+                    'val_fraction': fractions['val'], 'test_fraction': fractions['test'],
+                    'split_fractions': fractions, 'split_counts': counts,
+                    'tasks': {'grasps': self.require_grasps}, 'samples': {}}
         # Build beside the destination, then rename so failures never leave a usable partial export.
         staging = output.with_name(output.name + '.exporting')
         if staging.exists():
             raise ValueError(f'Staging folder already exists: {staging}')
         try:
             for directory in ('images', 'labels', 'adj', 'grasps'):
-                for split in ('train', 'val'):
+                for split in SPLITS:
                     (staging / directory / split).mkdir(parents=True, exist_ok=True)
             atomic_json(staging / 'classes.json', self.classes)
             for index, name in enumerate(names, 1):
                 sample = self.sample(name)
-                split = 'val' if name in val_names else 'train'
+                split = 'test' if name in test_names else 'val' if name in val_names else 'train'
                 stem = f'{index:06d}'
                 width, height = sizes[name]
                 # Copy pixels for a portable export, including non-PNG source formats.

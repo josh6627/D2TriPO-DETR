@@ -5,6 +5,8 @@
 
 # Datasets (VMRD and lab datasets)
 data/
+results/
+data_unlabeled/
 
 # Pretrained model weights and checkpoints
 checkpoints/

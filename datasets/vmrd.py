@@ -115,7 +115,9 @@ class CustomDataset(Dataset):
         grasp_angles = []
         grasp_heights = []
         try:
-            with (open(label_path_3, "r") if self.require_grasps else nullcontext([])) as f:
+            with (
+                open(label_path_3, "r") if self.require_grasps else nullcontext([])
+            ) as f:
                 for line in f:
                     parts = line.strip().split()
                     try:
@@ -155,7 +157,9 @@ class CustomDataset(Dataset):
             print(f"Label file {label_path_3} not found: {e}")
 
         if self.require_grasps and not grasp_points:
-            raise ValueError(f"No grasp labels in {label_path_3}; use --no-grasps for boxes/relationships training.")
+            raise ValueError(
+                f"No grasp labels in {label_path_3}; use --no-grasps for boxes/relationships training."
+            )
         grasp_points = torch.tensor(grasp_points, dtype=torch.float32).reshape(-1, 4, 2)
         grasp_angles = torch.tensor(grasp_angles, dtype=torch.float32)
         grasp_classes = torch.tensor(grasp_classes, dtype=torch.int64)
@@ -221,6 +225,7 @@ def make_vmrd_transforms(image_set):
     )
 
     scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
+    # scales = [800]
     if image_set == "train":
         return T.Compose(
             [
@@ -231,7 +236,7 @@ def make_vmrd_transforms(image_set):
             ]
         )
 
-    if image_set == "val":
+    if image_set in ("val", "test"):
         return T.Compose(
             [
                 T.RandomResize([800], max_size=1333),
@@ -246,7 +251,7 @@ def build(image_set, args=None):
 
     # locate the VMRD dataset relative to the repository
     dataset_root = Path(__file__).resolve().parent.parent / "data" / "vmrd"
-    if args is not None and getattr(args, 'dataset_root', None):
+    if args is not None and getattr(args, "dataset_root", None):
         dataset_root = Path(args.dataset_root)
     PATHS = {
         "train": (
@@ -261,6 +266,12 @@ def build(image_set, args=None):
             str(dataset_root / "adj" / "val"),
             str(dataset_root / "grasps" / "val"),
         ),
+        "test": (
+            str(dataset_root / "images" / "test"),
+            str(dataset_root / "labels" / "test"),
+            str(dataset_root / "adj" / "test"),
+            str(dataset_root / "grasps" / "test"),
+        ),
     }
 
     img_folder, label_folder, adj_folder, grasp_folder = PATHS[image_set]
@@ -270,7 +281,7 @@ def build(image_set, args=None):
         adj_folder,
         grasp_folder,
         transform=make_vmrd_transforms(image_set),
-        require_grasps=not getattr(args, 'no_grasps', False),
+        require_grasps=not getattr(args, "no_grasps", False),
     )
     return dataset
 

@@ -141,6 +141,7 @@ grasp annotations are not required. For example:
 ```bash
 python evaluate_dataset.py --dataset-root data/topdown_labeled --checkpoint results/topdown_finetune/checkpoint.pth
 python evaluate_dataset.py --dataset-root data/vmrd
+python evaluate_dataset.py --dataset-root data/real_lab_dataset --split test --checkpoint results/combined_finetune/checkpoint.pth
 ```
 
 Use `--split both` to evaluate train and val in one run, loading the model once
@@ -154,26 +155,37 @@ This uses the default checkpoint without fine-tuning. Use `--checkpoint` to
 select other weights. The split names describe the dataset folders; neither
 split is used to update model weights during evaluation.
 
-Use `--split train` for only train (the default is `val`),
+Use `--split test` for your held-out test images, `--split val` for validation
+(the default, including VMRD), or `--split train` for only train. The selected
+split must exist; the script reports a missing or empty split before loading the model.
+Use
 `--limit 10` to evaluate up to 10 images per split, or `--output-dir results/custom` to change the
-output directory. CSV results and error logs include the dataset name and split,
-for example `results/topdown_labeled_val_results.csv`. Evaluation uses CUDA.
+output directory. CSV results and error logs are saved alongside the visualization
+images, for example `results/visualizations/topdown_labeled_val/results.csv`
+and `errors.txt`. Evaluation uses CUDA.
 Choose a checkpoint trained with the dataset's class IDs, including any added
 classes; the default checkpoint is `checkpoints/checkpoint0110.pth`.
 
 Evaluation also saves annotated prediction images to
-`<output-dir>/visualizations/<dataset-name>_<split>/`: one `_objects.jpg` image
-with class names and confidence scores, and one `_relationships.jpg` image with
-arrows pointing from upper objects to lower objects. These use the same drawing
+`<output-dir>/visualizations/<dataset-name>_<split>/`: one `_relationships.jpg` image
+with object boxes, class names, confidence scores, and
+arrows pointing from upper objects to lower objects. A side panel lists every
+predicted relationship as `#ID class above #ID class` with its confidence score;
+the IDs match the box labels. Images with no predicted relationships say so.
+These use the same drawing
 style as `infer_unlabeled_dataset.py` and reuse the evaluation forward pass.
 They show predictions without ground-truth filtering, using object confidence
 above 0.4 and relationship probability above 0.5. Class names come from the
 checkpoint when available. Use `--no-visualizations` to save only metrics and logs.
-Set `--visualization-dir /path/to/images` to choose a separate image output
-location; dataset/split subfolders are added beneath it. `--output-dir` controls
-the CSV results and error logs.
+Set `--visualization-dir /path/to/images` to choose a folder for images, CSV results,
+and error logs; dataset/split subfolders are added beneath it. With
+`--no-visualizations`, `results.csv` and `errors.txt` still use the same folders.
 
 ### Dataset Preparation
+
+To combine exported lab datasets with VMRD while reconciling class IDs by name,
+use `scripts/merge_datasets.py`. See the [dataset merge guide](scripts/README_merge_datasets.md)
+for the command, class mappings, duplicate handling, and mixed grasp supervision.
 
 For unlabeled images in `data/topdown_renders`, run
 `python scripts/label_dataset.py` in the `d2tripo` environment. The desktop
@@ -190,6 +202,9 @@ See [MetaGraspNet conversion](scripts/README_metagraspnet.md) for class mapping,
 novel objects, grasp conversion assumptions, and loading the resulting dataset.
 
 Please download [VMRD](https://gr.xjtu.edu.cn/zh/web/zeuslan/dataset) dataset and [Cornell](https://journals.sagepub.com/doi/abs/10.1177/0278364914549607) dataset, then organize them as following:
+
+To extract a smaller percentage of converted VMRD while preserving its train/validation
+proportions, see the [VMRD subset guide](scripts/README_subset_vmrd.md).
 
 ```
 code_root/

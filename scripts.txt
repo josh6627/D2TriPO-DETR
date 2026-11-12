@@ -1,0 +1,49 @@
+python scripts/merge_datasets.py \
+  --inputs data/synth_lab_dataset data/real_lab_dataset data/vmrd_2.5pct \
+  --output data/combined_datasets/combined_dataset_no_topdown \
+  --cross-split-duplicates prefer-val
+
+
+python scripts/label_dataset.py \
+  --images data_unlabeled/real_cluttered_images \
+  --project data/labels/real_cluttered_labels/project.json \
+  --no-grasps
+
+python scripts/subset_vmrd.py \
+  --input data/vmrd \
+  --output data/vmrd_5pct \
+  --percent 5 \
+  --seed 42
+
+
+python evaluate_dataset.py --dataset-root data/real_lab_dataset \
+  --split test --checkpoint checkpoints/checkpoint0110.pth
+
+START TRAINING
+python main.py \
+  --dataset_root data/combined_datasets/combined_dataset_no_topdown \
+  --pretrain_model_path checkpoints/checkpoint0110.pth \
+  --finetune_ignore class_embed \
+  --no-pred-train \
+  --output_dir checkpoints/real-synth-vmrd_finetune \
+  --lr 1e-5 \
+  --lr_backbone 1e-6 \
+  --batch_size 1 \
+  --epochs 10 \
+  --lr_drop 25 \
+  --num_workers 4 \
+  --amp
+  
+RESUME
+python main.py \
+  --dataset_root data/combined_dataset \
+  --resume checkpoints/combined_finetune/checkpoint.pth \
+  --no-pred-train \
+  --output_dir checkpoints/combined_finetune \
+  --lr 1e-5 \
+  --lr_backbone 1e-6 \
+  --batch_size 1 \
+  --epochs 10 \
+  --lr_drop 25 \
+  --num_workers 4 \
+  --amp

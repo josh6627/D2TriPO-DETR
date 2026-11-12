@@ -54,13 +54,13 @@ def train_one_epoch(
     else:
         criterion.weight_dict["loss_adj"] = 1
 
-    for samples, targets in metric_logger.log_every(
-        data_loader, print_freq, header, logger=logger
+    for k, (samples, targets) in enumerate(
+        metric_logger.log_every(data_loader, print_freq, header, logger=logger)
     ):
 
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-
+        print(f"Image {k} has shape = {samples.shape} ")
         with torch.cuda.amp.autocast(enabled=args.amp):
             if need_tgt_for_training:
                 outputs = model(samples, targets)

@@ -17,7 +17,7 @@ class LabelProjectTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.images = self.root / 'images'
         self.images.mkdir()
-        for name in ('1.png', '2.png', 'density_map.png'):
+        for name in ('1.png', '2.png', '3.png', 'density_map.png'):
             Image.new('RGB', (100, 80)).save(self.images / name)
         self.project = Project(self.images, self.root / 'project.json')
 
@@ -34,9 +34,10 @@ class LabelProjectTests(unittest.TestCase):
         self.project.add_class('custom part')
         for name in self.project.files:
             self.annotate(name)
+        self.project.set_test_image('3.png', True)
 
     def test_registry_and_progress_survive_reopen(self):
-        self.assertEqual(self.project.files, ['1.png', '2.png'])
+        self.assertEqual(self.project.files, ['1.png', '2.png', '3.png'])
         self.assertEqual(self.project.add_class('custom part'), 31)
         self.assertEqual(self.project.add_class('second part'), 32)
         with self.assertRaises(ValueError):
@@ -57,7 +58,7 @@ class LabelProjectTests(unittest.TestCase):
         output = self.project.export(self.root / 'dataset')
         self.assertEqual(json.loads((output / 'classes.json').read_text())[31], 'custom part')
         manifest = json.loads((output / 'manifest.json').read_text())
-        self.assertEqual({v['split'] for v in manifest['samples'].values()}, {'train', 'val'})
+        self.assertEqual({v['split'] for v in manifest['samples'].values()}, {'train', 'val', 'test'})
         for stem, entry in manifest['samples'].items():
             split = entry['split']
             self.assertTrue(stem.isdigit())
@@ -77,7 +78,7 @@ class LabelProjectTests(unittest.TestCase):
     def test_incomplete_not_exported_and_invalid_completed_rejected(self):
         self.ready()
         self.project.sample('2.png')['complete'] = False
-        with self.assertRaisesRegex(ValueError, 'two images'):
+        with self.assertRaisesRegex(ValueError, 'three images'):
             self.project.export(self.root / 'dataset')
         self.project.sample('2.png')['complete'] = True
         self.project.sample('2.png')['grasps'] = []
@@ -130,7 +131,7 @@ class LabelProjectTests(unittest.TestCase):
         from datasets.vmrd import CustomDataset, make_vmrd_transforms
         self.ready()
         output = self.project.export(self.root / 'dataset')
-        for split in ('train', 'val'):
+        for split in ('train', 'val', 'test'):
             dataset = CustomDataset(*(str(output / folder / split) for folder in
                                       ('images', 'labels', 'adj', 'grasps')),
                                     transform=make_vmrd_transforms(split))

@@ -22,7 +22,7 @@ class NoGraspTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.images = self.root / 'source'
         self.images.mkdir()
-        for i in (1, 2):
+        for i in (1, 2, 3):
             Image.new('RGB', (100, 80)).save(self.images / f'{i}.png')
         self.project = Project(self.images, self.root / 'project.json', require_grasps=False)
         for name in self.project.files:
@@ -31,6 +31,7 @@ class NoGraspTests(unittest.TestCase):
                                    {'id': 8, 'class_id': 1, 'box': [40, 10, 90, 70]}],
                           edges=[[2, 8]], relations_reviewed=True, complete=True)
             validate(sample, self.project.classes, (100, 80), complete=True, require_grasps=False)
+        self.project.set_test_image('3.png', True)
         self.project.save()
 
     def test_persist_export_and_infer_mode(self):
@@ -54,7 +55,7 @@ class NoGraspTests(unittest.TestCase):
         from datasets.vmrd import CustomDataset, make_vmrd_transforms
         from datasets.transforms import hflip, vflip
         output = self.project.export(self.root / 'export')
-        for split in ('train', 'val'):
+        for split in ('train', 'val', 'test'):
             with self.assertRaisesRegex(ValueError, 'No grasp labels'):
                 CustomDataset(*(str(output / d / split) for d in ('images', 'labels', 'adj', 'grasps')))[0]
             dataset = CustomDataset(*(str(output / d / split) for d in ('images', 'labels', 'adj')),
