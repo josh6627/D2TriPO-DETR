@@ -74,7 +74,7 @@ class DABDeformableDETR(nn.Module):
 
         self.adj1_linear = nn.Linear(hidden_dim, hidden_dim)
         self.adj2_linear = nn.Linear(hidden_dim, hidden_dim)
-        self.adj_embed = MLP(2 * hidden_dim, hidden_dim, 1, 3)
+        self.adj_embed = MLP(2 * hidden_dim, hidden_dim, 3, 3)
         self.adj_query = nn.Linear(hidden_dim, hidden_dim)
         self.adj_key = nn.Linear(hidden_dim, hidden_dim)
         self.WG = nn.Linear(2 * hidden_dim, 1)
@@ -258,7 +258,7 @@ class DABDeformableDETR(nn.Module):
         gz = self.WG[lvl](decoder_outputs_adj).sigmoid()
 
         output_adj_end = gz * decoder_outputs_adj + ga * decoder_outouts_query_key
-        outputs_adj = self.adj_embed[lvl](output_adj_end).squeeze(-1)
+        outputs_adj = self.adj_embed[lvl](output_adj_end)
         return outputs_adj
 
     def _predict_adjacency(self, hidden, query, key, lvl):
@@ -725,33 +725,50 @@ class SetCriterion(nn.Module):
         Ap -> Am
         """
         assert "pred_adj" in outputs
-        pred_adj = outputs["pred_adj"]
+        pred_adj = outputs["pred_adj"]  # [B, Q, Q, 3]
 
         loss_adjs = []
 
         for batch_idx, (src_idx, tgt_idx) in enumerate(indices):
 
-            pred_adj_part = pred_adj[batch_idx][src_idx][:, src_idx]
-            pred_adj_perm = pred_adj_part.clone()
-            for i in range(len(tgt_idx)):
-                for j in range(len(tgt_idx)):
-                    pred_adj_perm[tgt_idx[i], tgt_idx[j]] = pred_adj_part[i, j]
+            if src_idx.numel() == 0:
+                continue
 
-            target_adj = targets[batch_idx]["adj"]
+            # reorder matching predictions into ground-truth order
+            order = torch.argsort(tgt_idx)
+            matched_src = src_idx[order]
+            matched_tgt = tgt_idx[order]
 
-            pred_adj_perm = pred_adj_perm.float()
+            # Predicted adjacency logits for matched objects
+            # Shape: [N, N, 3]
+            pred_adj_part = pred_adj[batch_idx][matched_src][:, matched_src]
 
-            target_adj = target_adj.float()
-            print(f"pred_adj:{pred_adj_perm}, target_adj:{target_adj}")
+            # Ground-truth adjacency labels
+            # Shape: [N, N]
+            target_adj = targets[batch_idx]["adj"].to(
+                device=pred_adj.device, dtype=torch.long
+            )
+
+            target_adj = target_adj[matched_tgt][:, matched_tgt]
+
             loss_adj = (
-                torch.nn.functional.binary_cross_entropy_with_logits(
-                    pred_adj_perm, target_adj, reduction="sum"
+                torch.nn.functional.cross_entropy(
+                    pred_adj_part.reshape(-1, 3),
+                    target_adj.reshape(-1),
+                    reduction="sum",
+                    ignore_index=-100,
                 )
                 / num_boxes
             )
+
             loss_adjs.append(loss_adj)
 
-        losses = {"loss_adj": sum(loss_adjs)}
+        if loss_adjs:
+            total_loss = sum(loss_adjs)
+        else:
+            total_loss = pred_adj.sum() * 0.0
+
+        losses = {"loss_adj": total_loss}
 
         return losses
 
