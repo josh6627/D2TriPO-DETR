@@ -33,7 +33,8 @@ def evaluate_relationships(ground_truth, predicted):
 
 
 def match_objects(
-    gt_objects, outputs, scores, indices, keep, num_classes, W, H, min_iou=0.5
+    gt_objects, outputs, scores, indices, keep, num_classes, W, H, min_iou=0.5,
+    class_agnostic=False,
 ):
 
     detections = []
@@ -88,7 +89,7 @@ def match_objects(
             same_class = gt["class_id"] == det["class_id"]
             iou = float(iou_matrix[i, j])
 
-            if same_class and iou >= min_iou:
+            if (class_agnostic or same_class) and iou >= min_iou:
                 cost[i, j] = 1.0 - iou
 
     # Find the best one-to-one assignment
@@ -101,6 +102,28 @@ def match_objects(
             matches[int(gt_idx)] = detections[int(pred_idx)]
 
     return matches, detections
+
+
+def align_relationships(gt_adj, outputs, matches, detections):
+    """Align all directed edges, keeping unmatched detections as extra slots."""
+    matched_queries = {det["query_id"] for det in matches.values()}
+    extra_queries = [det["query_id"] for det in detections
+                     if det["query_id"] not in matched_queries]
+    n_gt = len(gt_adj)
+    n_total = n_gt + len(extra_queries)
+    ground_truth = torch.zeros((n_total, n_total), dtype=gt_adj.dtype)
+    ground_truth[:n_gt, :n_gt] = gt_adj
+    predicted = torch.zeros_like(ground_truth)
+    gt_indices = sorted(matches)
+    positions = gt_indices + list(range(n_gt, n_total))
+    query_ids = [matches[i]["query_id"] for i in gt_indices] + extra_queries
+    if query_ids:
+        adjacency = outputs["pred_adj"][0]
+        subset = (adjacency[query_ids][:, query_ids].sigmoid() > 0.5).long().cpu()
+        idx = torch.tensor(positions, dtype=torch.long)
+        predicted[idx[:, None], idx[None, :]] = subset
+    predicted.fill_diagonal_(0)
+    return ground_truth, predicted
 
 
 device = torch.device("cuda")
@@ -370,40 +393,9 @@ def evaluate_one_image(image_path, model, return_predictions=False):
     # Number of annotated and extra predicted objects
     n_gt = len(gt_objects)
     n_extra = len(unmatched_detections)
-    n_total = n_gt + n_extra
-
-    # Extend ground truth with empty slots for extra detections
-    gt_for_scoring = torch.zeros((n_total, n_total), dtype=gt_adj.dtype)
-
-    gt_for_scoring[:n_gt, :n_gt] = gt_adj
-
-    # Full predicted adjacency
-    predicted_binary = torch.zeros_like(gt_for_scoring)
-
-    # Positions of matched ground-truth objects
-    matched_gt_indices = sorted(matches.keys())
-
-    # Their corresponding model query IDs
-    matched_query_ids = [matches[i]["query_id"] for i in matched_gt_indices]
-
-    # Place extra detections after the ground-truth objects
-    extra_query_ids = [det["query_id"] for det in unmatched_detections]
-
-    positions = matched_gt_indices + list(range(n_gt, n_total))
-    query_ids = matched_query_ids + extra_query_ids
-
-    # Extract predicted relationships
-    if query_ids:
-        pred_adj = outputs["pred_adj"][0]
-        pred_subset = pred_adj[query_ids][:, query_ids]
-
-        pred_subset = (pred_subset.sigmoid() > 0.5).long().cpu()
-
-        idx = torch.tensor(positions, dtype=torch.long)
-        predicted_binary[idx[:, None], idx[None, :]] = pred_subset
-
-    # Self-relationships are not scored
-    predicted_binary.fill_diagonal_(0)
+    gt_for_scoring, predicted_binary = align_relationships(
+        gt_adj, outputs, matches, detections
+    )
 
     missing_objects = n_gt - len(matches)
 
@@ -442,6 +434,7 @@ def evaluate_one_image(image_path, model, return_predictions=False):
     print("Image correct:", image_correct)
 
     result = {
+        "total_objects": n_gt,
         "tp": tp,
         "fp": fp,
         "fn": fn,
@@ -450,6 +443,29 @@ def evaluate_one_image(image_path, model, return_predictions=False):
         "image_correct": int(image_correct),
         "extra_relation_fp": extra_relation_fp,
     }
+    # Independently match geometry so class mistakes do not hide correct edges.
+    bbox_matches, _ = match_objects(
+        gt_objects, outputs, scores, indices, keep, num_classes, W, H,
+        class_agnostic=True,
+    )
+    bbox_gt, bbox_pred = align_relationships(gt_adj, outputs, bbox_matches, detections)
+    bbox_tp, bbox_fp, bbox_fn = evaluate_relationships(bbox_gt.tolist(), bbox_pred.tolist())
+    bbox_missing = n_gt - len(bbox_matches)
+    bbox_extra = len(detections) - len(bbox_matches)
+    result.update(
+        bbox_tp=bbox_tp,
+        bbox_fp=bbox_fp,
+        bbox_fn=bbox_fn,
+        bbox_missing_objects=bbox_missing,
+        bbox_extra_detections=bbox_extra,
+        bbox_extra_relation_fp=int(
+            bbox_pred[n_gt:, :].sum().item() + bbox_pred[:n_gt, n_gt:].sum().item()
+        ),
+        bbox_image_correct=int(
+            bbox_missing == 0 and bbox_extra == 0 and torch.equal(bbox_gt, bbox_pred)
+        ),
+    )
+    print(f"Box-only TP: {bbox_tp}, FP: {bbox_fp}, FN: {bbox_fn}")
     if return_predictions:
         from infer_unlabeled_dataset import decode_predictions
 

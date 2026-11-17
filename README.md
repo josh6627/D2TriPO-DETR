@@ -163,6 +163,24 @@ Use
 output directory. CSV results and error logs are saved alongside the visualization
 images, for example `results/visualizations/topdown_labeled_val/results.csv`
 and `errors.txt`. Evaluation uses CUDA.
+The existing metrics require matching object classes and boxes. Separate
+`bbox_*` CSV columns score relationships using one-to-one box matches at IoU
+>= 0.5, ignoring predicted object classes. Both endpoints must match and the
+arrow direction must be correct. Missing boxes still cause missed relationships;
+arrows involving unmatched detections count as false positives. The summary
+prints box-only micro precision, recall, F1, and the fraction of images with
+all boxes and relationships correct (ignoring classes). Both sets of metrics
+use the same confidence-filtered predictions.
+Precision is TP / (TP + FP), recall is TP / (TP + FN), and image accuracy
+is entirely correct images / evaluated images. Class-aware image accuracy
+requires all classes, boxes, and relationships to be correct; box-only image
+accuracy requires all boxes and relationships to be correct. These are
+calculated separately for each evaluation mode. `results.csv` includes per-image
+precision, recall, F1, and image accuracy, with `bbox_` prefixes for box-only
+scores. `summary.csv` saves separate `class_aware` and `box_only` rows with
+dataset scores computed from summed counts. CSV scores range from 0 to 1;
+the console shows percentages. Undefined scores are blank in CSV and `N/A`
+in the console. Failed images are excluded from both modes.
 Choose a checkpoint trained with the dataset's class IDs, including any added
 classes; the default checkpoint is `checkpoints/checkpoint0110.pth`.
 
@@ -182,6 +200,25 @@ and error logs; dataset/split subfolders are added beneath it. With
 `--no-visualizations`, `results.csv` and `errors.txt` still use the same folders.
 
 ### Dataset Preparation
+
+Count annotated objects, instances per class, and directed relationships without
+loading a model or using a GPU:
+
+```bash
+python scripts/dataset_stats.py --dataset-root data/vmrd
+python scripts/dataset_stats.py --dataset-root data/real_lab_dataset --split test
+python scripts/dataset_stats.py --dataset-root data/real_lab_dataset --csv counts.csv
+```
+
+The script reports each existing train/val/test split and combined totals,
+including registered classes with zero instances. It reads `classes.json` or
+the class mapping in `conversion_report.json`; use `--classes PATH` to supply
+a registry explicitly. Without a registry, it reports numeric class IDs.
+Instances are appearances across images, not unique physical objects.
+Relationships are saved directed adjacency entries equal to 1 (above → below),
+without adding inferred edges. Orphan annotations are ignored with a warning;
+missing or malformed annotations prevent totals from being reported. CSV export
+contains per-class counts by split and requires a new output filename.
 
 To combine exported lab datasets with VMRD while reconciling class IDs by name,
 use `scripts/merge_datasets.py`. See the [dataset merge guide](scripts/README_merge_datasets.md)

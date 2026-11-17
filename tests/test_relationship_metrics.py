@@ -58,6 +58,10 @@ class RelationshipMetricTests(unittest.TestCase):
             # Displayed and scored arrows must describe exactly the same predictions.
             self.assertEqual(len(result['prediction']['relationships']), result['tp'] + result['fp'])
             self.assertEqual(result['tp'] + result['fn'], sum(map(sum, gt_adj)))
+            self.assertEqual(result['total_objects'], len(gt_objects))
+            self.assertEqual(result['bbox_tp'] + result['bbox_fn'], sum(map(sum, gt_adj)))
+            self.assertEqual(result['bbox_tp'] + result['bbox_fp'],
+                             len(result['prediction']['relationships']))
             return result
 
     def test_correct_arrow_with_permuted_queries(self):
@@ -75,6 +79,28 @@ class RelationshipMetricTests(unittest.TestCase):
                                [(2, BOX_A), (1, BOX_B)], [(0, 1)])
         self.assertEqual((result['tp'], result['fp'], result['fn']), (0, 1, 1))
         self.assertEqual((result['missing_objects'], result['extra_detections']), (1, 1))
+        self.assertEqual((result['bbox_tp'], result['bbox_fp'], result['bbox_fn']), (1, 0, 0))
+        self.assertEqual((result['bbox_missing_objects'], result['bbox_extra_detections'],
+                          result['bbox_image_correct']), (0, 0, 1))
+
+    def test_box_only_reversed_edge_with_wrong_classes(self):
+        result = self.evaluate([(0, BOX_A), (1, BOX_B)], [[0, 1], [0, 0]],
+                               [(2, BOX_B), (2, BOX_A)], [(0, 1)])
+        self.assertEqual((result['bbox_tp'], result['bbox_fp'], result['bbox_fn']), (0, 1, 1))
+        self.assertEqual(result['bbox_image_correct'], 0)
+
+    def test_box_only_requires_overlap_even_when_classes_match(self):
+        result = self.evaluate([(0, BOX_A), (1, BOX_B)], [[0, 1], [0, 0]],
+                               [(0, BOX_C), (1, BOX_B)], [(0, 1)])
+        self.assertEqual((result['bbox_tp'], result['bbox_fp'], result['bbox_fn']), (0, 1, 1))
+        self.assertEqual(result['bbox_extra_relation_fp'], 1)
+
+    def test_box_only_duplicate_boxes_cannot_match_same_object_twice(self):
+        result = self.evaluate([(0, BOX_A), (1, BOX_B)], [[0, 1], [0, 0]],
+                               [(2, BOX_A), (2, BOX_A), (2, BOX_B)], [(0, 2), (1, 2)])
+        self.assertEqual((result['bbox_tp'], result['bbox_fp'], result['bbox_fn']), (1, 1, 0))
+        self.assertEqual(result['bbox_extra_detections'], 1)
+        self.assertEqual(result['bbox_extra_relation_fp'], 1)
 
     def test_missing_endpoint_and_no_predictions(self):
         for detections, missing in (([(0, BOX_A)], 1), ([], 2)):
@@ -82,6 +108,8 @@ class RelationshipMetricTests(unittest.TestCase):
                 result = self.evaluate([(0, BOX_A), (1, BOX_B)], [[0, 1], [0, 0]], detections, [])
                 self.assertEqual((result['tp'], result['fp'], result['fn']), (0, 0, 1))
                 self.assertEqual(result['missing_objects'], missing)
+                self.assertEqual((result['bbox_tp'], result['bbox_fp'], result['bbox_fn']), (0, 0, 1))
+                self.assertEqual(result['bbox_missing_objects'], missing)
 
     def test_edge_between_two_extra_detections_is_counted_once(self):
         result = self.evaluate([(0, BOX_A)], [[0]], [(0, BOX_A), (2, BOX_B), (2, BOX_C)], [(1, 2)])

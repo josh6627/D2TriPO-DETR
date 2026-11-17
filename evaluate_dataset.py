@@ -6,6 +6,23 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 
+BBOX_FIELDS = (
+    "bbox_tp", "bbox_fp", "bbox_fn", "bbox_missing_objects",
+    "bbox_extra_detections", "bbox_extra_relation_fp", "bbox_image_correct",
+)
+SCORE_FIELDS = ("recall", "precision", "f1", "image_accuracy")
+
+
+def calculate_scores(tp, fp, fn, correct_images, image_count):
+    """Micro edge scores and the fraction of entirely correct images (0–1)."""
+    return {
+        "recall": tp / (tp + fn) if tp + fn else None,
+        "precision": tp / (tp + fp) if tp + fp else None,
+        "f1": 2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else None,
+        "image_accuracy": correct_images / image_count if image_count else None,
+    }
+
+
 def save_visualizations(image_path, prediction, output_dir):
     from PIL import Image, ImageDraw, ImageFont
     from infer_unlabeled_dataset import visualize
@@ -196,6 +213,7 @@ def evaluate_split(
             rows.append(
                 {
                     "image": image_path.name,
+                    "total_objects": int(result["total_objects"]),
                     "tp": int(result["tp"]),
                     "fp": int(result["fp"]),
                     "fn": int(result["fn"]),
@@ -203,8 +221,16 @@ def evaluate_split(
                     "extra_detections": int(result["extra_detections"]),
                     "extra_relation_fp": int(result["extra_relation_fp"]),
                     "image_correct": int(result["image_correct"]),
+                    **{key: int(result[key]) for key in BBOX_FIELDS},
                 }
             )
+            row = rows[-1]
+            for prefix in ("", "bbox_"):
+                scores = calculate_scores(
+                    row[f"{prefix}tp"], row[f"{prefix}fp"], row[f"{prefix}fn"],
+                    row[f"{prefix}image_correct"], 1,
+                )
+                row.update({f"{prefix}{key}": value for key, value in scores.items()})
             if save_images:
                 try:
                     save_visualizations(
@@ -238,6 +264,7 @@ def evaluate_split(
             f,
             fieldnames=(
                 "image",
+                "total_objects",
                 "tp",
                 "fp",
                 "fn",
@@ -245,6 +272,9 @@ def evaluate_split(
                 "extra_detections",
                 "extra_relation_fp",
                 "image_correct",
+                *BBOX_FIELDS,
+                *SCORE_FIELDS,
+                *(f"bbox_{key}" for key in SCORE_FIELDS),
             ),
         )
         writer.writeheader()
@@ -259,13 +289,12 @@ def evaluate_split(
     total_fp = sum(r["fp"] for r in rows)
     total_fn = sum(r["fn"] for r in rows)
 
+    total_objects = sum(r["total_objects"] for r in rows)
     total_missing = sum(r["missing_objects"] for r in rows)
     total_extra = sum(r["extra_detections"] for r in rows)
     correct_images = sum(r["image_correct"] for r in rows)
 
-    recall = total_tp / (total_tp + total_fn) if total_tp + total_fn > 0 else None
-    precision = total_tp / (total_tp + total_fp) if total_tp + total_fp > 0 else None
-    strict_accuracy = correct_images / len(rows) if rows else None
+    class_scores = calculate_scores(total_tp, total_fp, total_fn, correct_images, len(rows))
 
     print("\n=== DATASET RESULTS ===")
     print(f"Images requested: {len(images)}")
@@ -273,13 +302,41 @@ def evaluate_split(
     print(f"Images failed: {len(errors)}")
     if visualization_errors:
         print(f"Visualizations failed: {len(visualization_errors)} (metrics retained)")
+    print("\nClass-aware relationship metrics (IoU >= 0.5; matching object classes):")
+    print(f"Total objects: {total_objects}")
     print(f"Total missing objects: {total_missing}")
     print(f"Total extra detections: {total_extra}")
     print(f"TP: {total_tp}, FP: {total_fp}, FN: {total_fn}")
-    print(f"Provisional micro edge recall: {recall * 100.0 if recall is not None else 'N/A'}")
-    print(f"Provisional micro edge precision: {precision * 100.0 if precision is not None else 'N/A'}")
-    print(f"Strict correct-image fraction: {strict_accuracy * 100.0 if strict_accuracy is not None else 'N/A'}")
+    for key, label in (("recall", "micro edge recall"), ("precision", "micro edge precision"),
+                       ("f1", "micro edge F1"), ("image_accuracy", "image accuracy")):
+        score = class_scores[key]
+        print(f"Class-aware {label}: {score * 100.0 if score is not None else 'N/A'}")
+    bbox = {key: sum(row[key] for row in rows) for key in BBOX_FIELDS}
+    tp, fp, fn = bbox["bbox_tp"], bbox["bbox_fp"], bbox["bbox_fn"]
+    bbox_scores = calculate_scores(tp, fp, fn, bbox["bbox_image_correct"], len(rows))
+    print("\nBox-only relationship metrics (IoU >= 0.5; object classes ignored):")
+    print(f"TP: {tp}, FP: {fp}, FN: {fn}")
+    print(f"Total missing boxes: {bbox['bbox_missing_objects']}")
+    print(f"Total extra boxes: {bbox['bbox_extra_detections']}")
+    for key, label in (("recall", "micro edge recall"), ("precision", "micro edge precision"),
+                       ("f1", "micro edge F1"), ("image_accuracy", "image accuracy")):
+        score = bbox_scores[key]
+        print(f"Box-only {label}: {score * 100.0 if score is not None else 'N/A'}")
+
+    summary_path = image_output_dir / "summary.csv"
+    with summary_path.open("w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=("evaluation", "images_evaluated", "tp", "fp", "fn", *SCORE_FIELDS)
+        )
+        writer.writeheader()
+        writer.writerows([
+            dict(evaluation="class_aware", images_evaluated=len(rows),
+                 tp=total_tp, fp=total_fp, fn=total_fn, **class_scores),
+            dict(evaluation="box_only", images_evaluated=len(rows),
+                 tp=tp, fp=fp, fn=fn, **bbox_scores),
+        ])
     print(f"\nResults saved: {csv_path}")
+    print(f"Dataset summary: {summary_path}")
     print(f"Error log: {error_path}")
     if save_images:
         print(f"Visualizations: {image_output_dir}")

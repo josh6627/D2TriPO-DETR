@@ -16,6 +16,10 @@ python scripts/subset_vmrd.py \
   --seed 42
 
 
+python scripts/label_dataset.py \
+  --images path/to/new_images \
+  --project data/labels/new_images/project.json
+
 python evaluate_dataset.py --dataset-root data/real_lab_dataset \
   --split test --checkpoint checkpoints/checkpoint0110.pth
 
@@ -29,8 +33,7 @@ python main.py \
   --lr 1e-5 \
   --lr_backbone 1e-6 \
   --batch_size 1 \
-  --epochs 10 \
-  --lr_drop 25 \
+  --epochs 40 \
   --num_workers 4 \
   --amp
   

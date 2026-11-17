@@ -1,5 +1,51 @@
 # Label the top-down renders
 
+## Start a separate project with model predictions
+
+`prelabel_dataset.py` runs inference and writes a **new** project compatible with
+the existing labeler. It does not change the labeler, existing annotations, or
+source images. Use a flat folder containing only the new images you want to label.
+
+```bash
+conda activate d2tripo
+python prelabel_dataset.py \
+  --images path/to/new_images \
+  --project data/labels/new_images/project.json
+python scripts/label_dataset.py \
+  --images path/to/new_images \
+  --project data/labels/new_images/project.json
+```
+
+Defaults use `checkpoints/real-cluttered-lab_finetune/checkpoint.pth` and the exact
+ordered registry in `data/real_cluttered_lab/classes.json`. All 43 class names and
+their order must match the checkpoint's saved `class_names`; otherwise the script
+stops. Classes are never sorted, renamed, appended, or inferred from detections.
+Another training registry or existing project can be supplied with
+`--classes-from PATH`; another checkpoint with `--checkpoint PATH`.
+
+Existing output projects are never overwritten. To try a few images first, use
+`--limit 5` and a separate trial output path. Other images in the folder remain
+available as empty samples in the labeler. Run in your GPU environment: the
+model's compiled deformable-attention operator requires CUDA. The default device
+is `cuda`; use `--device cuda:1` to select another GPU.
+
+Predicted boxes/classes and above→below relationships are editable immediately.
+Every image starts incomplete with relationships unreviewed. Missing objects
+still need adding; incorrect or duplicate detections need fixing/removing.
+The defaults are `--score-threshold 0.4 --relation-threshold 0.5 --topk 100`.
+Degenerate boxes and unnamed classifier channels are skipped. Relationships are
+considered in descending confidence order, rejecting edges that would form a
+cycle (including contradictory pairs); skipped counts are printed per image.
+
+Grasps are not generated. The new project defaults to boxes/relationships mode;
+pass `--require-grasps` if you want to add grasps manually before completion.
+Review and mark images complete, select test images, and export normally.
+Old and new exports can be combined with the dataset merge script; keep test
+images held out. Keeping this class registry preserves the meaning of the
+existing checkpoint's class channels and does not itself require retraining.
+
+## Launch the manual labeler
+
 From the repository root:
 
 ```bash

@@ -20,17 +20,29 @@ from torch.utils.checkpoint import checkpoint
 import math
 
 from util import box_ops
-from util.misc import (NestedTensor, nested_tensor_from_tensor_list,
-                       accuracy, get_world_size, interpolate,
-                       is_dist_avail_and_initialized, inverse_sigmoid)
+from util.misc import (
+    NestedTensor,
+    nested_tensor_from_tensor_list,
+    accuracy,
+    get_world_size,
+    interpolate,
+    is_dist_avail_and_initialized,
+    inverse_sigmoid,
+)
 
 from .backbone import build_backbone
 from .matcher import build_matcher
-from .segmentation import (DETRsegm, PostProcessPanoptic, PostProcessSegm,
-                           dice_loss, sigmoid_focal_loss)
+from .segmentation import (
+    DETRsegm,
+    PostProcessPanoptic,
+    PostProcessSegm,
+    dice_loss,
+    sigmoid_focal_loss,
+)
 from .deformable_transformer import build_deforamble_transformer
 import copy
 from oriented_iou_loss import cal_eiou
+
 
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
@@ -38,12 +50,20 @@ def _get_clones(module, N):
 
 class DABDeformableDETR(nn.Module):
 
-    def __init__(self, backbone, transformer, num_classes, num_queries, num_feature_levels,
-                 aux_loss=True, with_box_refine=True, two_stage=False,
-                 use_dab=True, 
-                 num_patterns=0,
-                 random_refpoints_xy=False
-                 ):
+    def __init__(
+        self,
+        backbone,
+        transformer,
+        num_classes,
+        num_queries,
+        num_feature_levels,
+        aux_loss=True,
+        with_box_refine=True,
+        two_stage=False,
+        use_dab=True,
+        num_patterns=0,
+        random_refpoints_xy=False,
+    ):
         super().__init__()
         self.num_queries = num_queries
         self.transformer = transformer
@@ -54,10 +74,10 @@ class DABDeformableDETR(nn.Module):
 
         self.adj1_linear = nn.Linear(hidden_dim, hidden_dim)
         self.adj2_linear = nn.Linear(hidden_dim, hidden_dim)
-        self.adj_embed = MLP(2*hidden_dim, hidden_dim, 1, 3)
+        self.adj_embed = MLP(2 * hidden_dim, hidden_dim, 1, 3)
         self.adj_query = nn.Linear(hidden_dim, hidden_dim)
         self.adj_key = nn.Linear(hidden_dim, hidden_dim)
-        self.WG = nn.Linear(2*hidden_dim, 1)
+        self.WG = nn.Linear(2 * hidden_dim, 1)
 
         self.class_embed_grasp = nn.Linear(hidden_dim, num_classes)
         self.bbox_embed_grasp = MLP(hidden_dim, hidden_dim, 4, 3)
@@ -69,7 +89,7 @@ class DABDeformableDETR(nn.Module):
         self.random_refpoints_xy = random_refpoints_xy
         if not two_stage:
             if not use_dab:
-                self.query_embed = nn.Embedding(num_queries, hidden_dim*2)
+                self.query_embed = nn.Embedding(num_queries, hidden_dim * 2)
             else:
                 self.tgt_embed = nn.Embedding(num_queries, hidden_dim)
                 self.refpoint_embed = nn.Embedding(num_queries, 4)
@@ -78,8 +98,10 @@ class DABDeformableDETR(nn.Module):
                 self.refangle_embed_grasp = nn.Embedding(num_queries, 19)
 
                 if random_refpoints_xy:
-                    self.refpoint_embed.weight.data[:, :2].uniform_(0,1)
-                    self.refpoint_embed.weight.data[:, :2] = inverse_sigmoid(self.refpoint_embed.weight.data[:, :2])
+                    self.refpoint_embed.weight.data[:, :2].uniform_(0, 1)
+                    self.refpoint_embed.weight.data[:, :2] = inverse_sigmoid(
+                        self.refpoint_embed.weight.data[:, :2]
+                    )
                     self.refpoint_embed.weight.data[:, :2].requires_grad = False
 
         if self.num_patterns > 0:
@@ -90,23 +112,32 @@ class DABDeformableDETR(nn.Module):
             input_proj_list = []
             for _ in range(num_backbone_outs):
                 in_channels = backbone.num_channels[_]
-                input_proj_list.append(nn.Sequential(
-                    nn.Conv2d(in_channels, hidden_dim, kernel_size=1),
-                    nn.GroupNorm(32, hidden_dim),
-                ))
+                input_proj_list.append(
+                    nn.Sequential(
+                        nn.Conv2d(in_channels, hidden_dim, kernel_size=1),
+                        nn.GroupNorm(32, hidden_dim),
+                    )
+                )
             for _ in range(num_feature_levels - num_backbone_outs):
-                input_proj_list.append(nn.Sequential(
-                    nn.Conv2d(in_channels, hidden_dim, kernel_size=3, stride=2, padding=1),
-                    nn.GroupNorm(32, hidden_dim),
-                ))
+                input_proj_list.append(
+                    nn.Sequential(
+                        nn.Conv2d(
+                            in_channels, hidden_dim, kernel_size=3, stride=2, padding=1
+                        ),
+                        nn.GroupNorm(32, hidden_dim),
+                    )
+                )
                 in_channels = hidden_dim
             self.input_proj = nn.ModuleList(input_proj_list)
         else:
-            self.input_proj = nn.ModuleList([
-                nn.Sequential(
-                    nn.Conv2d(backbone.num_channels[0], hidden_dim, kernel_size=1),
-                    nn.GroupNorm(32, hidden_dim),
-                )])
+            self.input_proj = nn.ModuleList(
+                [
+                    nn.Sequential(
+                        nn.Conv2d(backbone.num_channels[0], hidden_dim, kernel_size=1),
+                        nn.GroupNorm(32, hidden_dim),
+                    )
+                ]
+            )
         self.backbone = backbone
         self.aux_loss = aux_loss
         self.with_box_refine = with_box_refine
@@ -133,8 +164,16 @@ class DABDeformableDETR(nn.Module):
             nn.init.xavier_uniform_(proj[0].weight, gain=1)
             nn.init.constant_(proj[0].bias, 0)
 
-        num_pred = (transformer.decoder.num_layers + 1) if two_stage else transformer.decoder.num_layers
-        num_pred_grasp = (transformer.decoder_grasp.num_layers + 1) if two_stage else transformer.decoder_grasp.num_layers
+        num_pred = (
+            (transformer.decoder.num_layers + 1)
+            if two_stage
+            else transformer.decoder.num_layers
+        )
+        num_pred_grasp = (
+            (transformer.decoder_grasp.num_layers + 1)
+            if two_stage
+            else transformer.decoder_grasp.num_layers
+        )
 
         if with_box_refine:
             self.class_embed = _get_clones(self.class_embed, num_pred)
@@ -142,17 +181,23 @@ class DABDeformableDETR(nn.Module):
             nn.init.constant_(self.bbox_embed[0].layers[-1].bias.data[2:], -2.0)
             self.transformer.decoder.bbox_embed = self.bbox_embed
 
-            self.adj1_linear= nn.ModuleList([self.adj1_linear for _ in range(num_pred)])
-            self.adj2_linear = nn.ModuleList([self.adj2_linear for _ in range(num_pred)])
-            self.adj_embed = _get_clones(self.adj_embed , num_pred)
+            self.adj1_linear = nn.ModuleList(
+                [self.adj1_linear for _ in range(num_pred)]
+            )
+            self.adj2_linear = nn.ModuleList(
+                [self.adj2_linear for _ in range(num_pred)]
+            )
+            self.adj_embed = _get_clones(self.adj_embed, num_pred)
 
-            self.adj_query= nn.ModuleList([self.adj_query for _ in range(num_pred)])
+            self.adj_query = nn.ModuleList([self.adj_query for _ in range(num_pred)])
             self.adj_key = nn.ModuleList([self.adj_key for _ in range(num_pred)])
             self.WG = _get_clones(self.WG, num_pred)
 
         else:
             nn.init.constant_(self.bbox_embed.layers[-1].bias.data[2:], -2.0)
-            self.class_embed = nn.ModuleList([self.class_embed for _ in range(num_pred)])
+            self.class_embed = nn.ModuleList(
+                [self.class_embed for _ in range(num_pred)]
+            )
             self.bbox_embed = nn.ModuleList([self.bbox_embed for _ in range(num_pred)])
             self.transformer.decoder.bbox_embed = None
 
@@ -166,9 +211,15 @@ class DABDeformableDETR(nn.Module):
 
         else:
             nn.init.constant_(self.bbox_embed_grasp.layers[-1].bias.data[2:], -2.0)
-            self.class_embed_grasp = nn.ModuleList([self.class_embed_grasp for _ in range(num_pred_grasp)])
-            self.bbox_embed_grasp = nn.ModuleList([self.bbox_embed_grasp for _ in range(num_pred_grasp)])
-            self.angle_embed_grasp = nn.ModuleList([self.angle_embed_grasp for _ in range(num_pred_grasp)])
+            self.class_embed_grasp = nn.ModuleList(
+                [self.class_embed_grasp for _ in range(num_pred_grasp)]
+            )
+            self.bbox_embed_grasp = nn.ModuleList(
+                [self.bbox_embed_grasp for _ in range(num_pred_grasp)]
+            )
+            self.angle_embed_grasp = nn.ModuleList(
+                [self.angle_embed_grasp for _ in range(num_pred_grasp)]
+            )
             self.transformer.decoder_grasp.bbox_embed = None
 
         if two_stage:
@@ -181,20 +232,32 @@ class DABDeformableDETR(nn.Module):
         num_queries = hidden.shape[1]
         decoder_outputs_adj_1 = self.adj1_linear[lvl](hidden).unsqueeze(2)
         decoder_outputs_adj_2 = self.adj2_linear[lvl](hidden).unsqueeze(1)
-        decoder_outputs_adj_1 = decoder_outputs_adj_1.expand(-1, num_queries, num_queries, -1)
-        decoder_outputs_adj_2 = decoder_outputs_adj_2.expand(-1, num_queries, num_queries, -1)
-        decoder_outputs_adj = torch.cat((decoder_outputs_adj_1, decoder_outputs_adj_2), dim=-1)
+        decoder_outputs_adj_1 = decoder_outputs_adj_1.expand(
+            -1, num_queries, num_queries, -1
+        )
+        decoder_outputs_adj_2 = decoder_outputs_adj_2.expand(
+            -1, num_queries, num_queries, -1
+        )
+        decoder_outputs_adj = torch.cat(
+            (decoder_outputs_adj_1, decoder_outputs_adj_2), dim=-1
+        )
 
         decoder_outouts_query = self.adj_query[lvl](query).unsqueeze(2)
         decoder_outouts_key = self.adj_key[lvl](key).unsqueeze(1)
-        decoder_outouts_query_boardcast = decoder_outouts_query.expand(-1, num_queries, num_queries, -1)
-        decoder_outouts_key_boardcast = decoder_outouts_key.expand(-1, num_queries, num_queries, -1)
-        decoder_outouts_query_key = torch.cat((decoder_outouts_query_boardcast, decoder_outouts_key_boardcast), dim=-1)
+        decoder_outouts_query_boardcast = decoder_outouts_query.expand(
+            -1, num_queries, num_queries, -1
+        )
+        decoder_outouts_key_boardcast = decoder_outouts_key.expand(
+            -1, num_queries, num_queries, -1
+        )
+        decoder_outouts_query_key = torch.cat(
+            (decoder_outouts_query_boardcast, decoder_outouts_key_boardcast), dim=-1
+        )
 
-        ga=self.WG[lvl](decoder_outouts_query_key).sigmoid()
-        gz=self.WG[lvl](decoder_outputs_adj).sigmoid()
+        ga = self.WG[lvl](decoder_outouts_query_key).sigmoid()
+        gz = self.WG[lvl](decoder_outputs_adj).sigmoid()
 
-        output_adj_end = gz*decoder_outputs_adj + ga*decoder_outouts_query_key
+        output_adj_end = gz * decoder_outputs_adj + ga * decoder_outouts_query_key
         outputs_adj = self.adj_embed[lvl](output_adj_end).squeeze(-1)
         return outputs_adj
 
@@ -205,7 +268,11 @@ class DABDeformableDETR(nn.Module):
         # the correct layer after the decoder loop has finished.
         if self.training and torch.is_grad_enabled():
             return checkpoint(
-                self._adjacency_logits, hidden, query, key, lvl,
+                self._adjacency_logits,
+                hidden,
+                query,
+                key,
+                lvl,
                 use_reentrant=False,
             )
         return self._adjacency_logits(hidden, query, key, lvl)
@@ -232,7 +299,9 @@ class DABDeformableDETR(nn.Module):
                 else:
                     src = self.input_proj[l](srcs[-1])
                 m = samples.mask
-                mask = F.interpolate(m[None].float(), size=src.shape[-2:]).to(torch.bool)[0]
+                mask = F.interpolate(m[None].float(), size=src.shape[-2:]).to(
+                    torch.bool
+                )[0]
                 pos_l = self.backbone[1](NestedTensor(src, mask)).to(src.dtype)
                 srcs.append(src)
                 masks.append(mask)
@@ -241,35 +310,46 @@ class DABDeformableDETR(nn.Module):
         if self.two_stage:
             query_embeds = None
         elif self.use_dab:
-            
+
             if self.num_patterns == 0:
-                tgt_embed = self.tgt_embed.weight        
-                refanchor = self.refpoint_embed.weight      
+                tgt_embed = self.tgt_embed.weight
+                refanchor = self.refpoint_embed.weight
                 query_embeds = torch.cat((tgt_embed, refanchor), dim=1)
 
-                tgt_embed_grasp = self.tgt_embed_grasp.weight        
-                refanchor_grasp = self.refpoint_embed_grasp.weight  
+                tgt_embed_grasp = self.tgt_embed_grasp.weight
+                refanchor_grasp = self.refpoint_embed_grasp.weight
                 refangle_grasp = self.refangle_embed_grasp.weight
-                query_embeds_grasp = torch.cat((tgt_embed_grasp, refanchor_grasp, refangle_grasp), dim=1)
-            
+                query_embeds_grasp = torch.cat(
+                    (tgt_embed_grasp, refanchor_grasp, refangle_grasp), dim=1
+                )
+
             else:
-                tgt_embed = self.tgt_embed.weight          
-                pat_embed = self.patterns_embed.weight     
+                tgt_embed = self.tgt_embed.weight
+                pat_embed = self.patterns_embed.weight
                 tgt_embed = tgt_embed.repeat(self.num_patterns, 1)
-                pat_embed = pat_embed[:, None, :].repeat(1, self.num_queries, 1).flatten(0, 1) 
+                pat_embed = (
+                    pat_embed[:, None, :].repeat(1, self.num_queries, 1).flatten(0, 1)
+                )
                 tgt_all_embed = tgt_embed + pat_embed
-                refanchor = self.refpoint_embed.weight.repeat(self.num_patterns, 1)      
+                refanchor = self.refpoint_embed.weight.repeat(self.num_patterns, 1)
                 query_embeds = torch.cat((tgt_all_embed, refanchor), dim=1)
         else:
             query_embeds = self.query_embed.weight
-        
-        hs, init_reference, inter_references, \
-        hs_grasp, init_reference_grasp, inter_references_grasp, \
-        init_reference_out_angle_grasp, inter_references_out_angle_grasp,\
-        q, k,\
-        enc_outputs_class, enc_outputs_coord_unact = \
-        self.transformer(srcs, masks, pos, query_embeds, query_embeds_grasp)
 
+        (
+            hs,
+            init_reference,
+            inter_references,
+            hs_grasp,
+            init_reference_grasp,
+            inter_references_grasp,
+            init_reference_out_angle_grasp,
+            inter_references_out_angle_grasp,
+            q,
+            k,
+            enc_outputs_class,
+            enc_outputs_coord_unact,
+        ) = self.transformer(srcs, masks, pos, query_embeds, query_embeds_grasp)
 
         outputs_classes = []
         outputs_coords = []
@@ -320,47 +400,81 @@ class DABDeformableDETR(nn.Module):
                 tmp_grasp[..., :2] += reference_grasp
             outputs_coord_grasp = tmp_grasp.sigmoid()
             outputs_classes_grasp.append(outputs_class_grasp)
-            outputs_angles_grasp.append(outputs_angle_grasp)    
+            outputs_angles_grasp.append(outputs_angle_grasp)
             outputs_coords_grasp.append(outputs_coord_grasp)
         outputs_class_grasp = torch.stack(outputs_classes_grasp)
         outputs_coord_grasp = torch.stack(outputs_coords_grasp)
         outputs_angle_grasp = torch.stack(outputs_angles_grasp)
 
         out = {
-                'pred_logits': outputs_class[-1], 
-                'pred_boxes': outputs_coord[-1],
-                'pred_logits_grasp': outputs_class_grasp[-1], 
-                'pred_boxes_grasp': outputs_coord_grasp[-1],
-                'pred_angles_grasp': outputs_angle_grasp[-1],
-                'pred_adj': outputs_adj[-1]
-               }
+            "pred_logits": outputs_class[-1],
+            "pred_boxes": outputs_coord[-1],
+            "pred_logits_grasp": outputs_class_grasp[-1],
+            "pred_boxes_grasp": outputs_coord_grasp[-1],
+            "pred_angles_grasp": outputs_angle_grasp[-1],
+            "pred_adj": outputs_adj[-1],
+        }
         if self.aux_loss:
-            out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord, outputs_class_grasp, outputs_coord_grasp, outputs_angle_grasp, outputs_adj)
+            out["aux_outputs"] = self._set_aux_loss(
+                outputs_class,
+                outputs_coord,
+                outputs_class_grasp,
+                outputs_coord_grasp,
+                outputs_angle_grasp,
+                outputs_adj,
+            )
 
         if self.two_stage:
             enc_outputs_coord = enc_outputs_coord_unact.sigmoid()
-            out['enc_outputs'] = {'pred_logits': enc_outputs_class, 'pred_boxes': enc_outputs_coord}
-
+            out["enc_outputs"] = {
+                "pred_logits": enc_outputs_class,
+                "pred_boxes": enc_outputs_coord,
+            }
 
         return out
 
     @torch.jit.unused
-    def _set_aux_loss(self, outputs_class, outputs_coord, outputs_class_grasp, outputs_coord_grasp, outputs_angle_grasp, output_adj):
+    def _set_aux_loss(
+        self,
+        outputs_class,
+        outputs_coord,
+        outputs_class_grasp,
+        outputs_coord_grasp,
+        outputs_angle_grasp,
+        output_adj,
+    ):
 
-        return [{'pred_logits': a, 'pred_boxes': b, 'pred_logits_grasp': c, 'pred_boxes_grasp': d, 'pred_angles_grasp': e, 'pred_adj': f}
-                for a, b, c, d, e, f in zip(
-                                         outputs_class[:-1], 
-                                         outputs_coord[:-1], 
-                                         outputs_class_grasp[:-1], 
-                                         outputs_coord_grasp[:-1],
-                                         outputs_angle_grasp[:-1],
-                                         output_adj[:-1]
-                                         )]
+        return [
+            {
+                "pred_logits": a,
+                "pred_boxes": b,
+                "pred_logits_grasp": c,
+                "pred_boxes_grasp": d,
+                "pred_angles_grasp": e,
+                "pred_adj": f,
+            }
+            for a, b, c, d, e, f in zip(
+                outputs_class[:-1],
+                outputs_coord[:-1],
+                outputs_class_grasp[:-1],
+                outputs_coord_grasp[:-1],
+                outputs_angle_grasp[:-1],
+                output_adj[:-1],
+            )
+        ]
 
 
 class SetCriterion(nn.Module):
 
-    def __init__(self, num_classes, weight_dict, losses, focal_alpha=0.25, matcher = None, matcher_grasp = None):
+    def __init__(
+        self,
+        num_classes,
+        weight_dict,
+        losses,
+        focal_alpha=0.25,
+        matcher=None,
+        matcher_grasp=None,
+    ):
 
         super().__init__()
         self.num_classes = num_classes
@@ -371,93 +485,166 @@ class SetCriterion(nn.Module):
         self.focal_alpha = focal_alpha
         self.matcher_grasp = matcher_grasp
 
+    def loss_labels(
+        self,
+        outputs,
+        targets,
+        num_boxes,
+        indices,
+        num_grasp_boxes,
+        indices_grasp,
+        log=True,
+    ):
 
-    def loss_labels(self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp, log=True):
-
-        assert 'pred_logits' in outputs
-        src_logits = outputs['pred_logits']
+        assert "pred_logits" in outputs
+        src_logits = outputs["pred_logits"]
 
         idx = self._get_src_permutation_idx(indices)
-        target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
-        target_classes = torch.full(src_logits.shape[:2], self.num_classes,
-                                    dtype=torch.int64, device=src_logits.device)
+        target_classes_o = torch.cat(
+            [t["labels"][J] for t, (_, J) in zip(targets, indices)]
+        )
+        target_classes = torch.full(
+            src_logits.shape[:2],
+            self.num_classes,
+            dtype=torch.int64,
+            device=src_logits.device,
+        )
         target_classes[idx] = target_classes_o
 
-        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2] + 1],
-                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device)
+        target_classes_onehot = torch.zeros(
+            [src_logits.shape[0], src_logits.shape[1], src_logits.shape[2] + 1],
+            dtype=src_logits.dtype,
+            layout=src_logits.layout,
+            device=src_logits.device,
+        )
         target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
 
-        target_classes_onehot = target_classes_onehot[:,:,:-1]
-        loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=2) * src_logits.shape[1]
-        losses = {'loss_ce': loss_ce}
+        target_classes_onehot = target_classes_onehot[:, :, :-1]
+        loss_ce = (
+            sigmoid_focal_loss(
+                src_logits,
+                target_classes_onehot,
+                num_boxes,
+                alpha=self.focal_alpha,
+                gamma=2,
+            )
+            * src_logits.shape[1]
+        )
+        losses = {"loss_ce": loss_ce}
 
         if log:
-            losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0]
+            losses["class_error"] = 100 - accuracy(src_logits[idx], target_classes_o)[0]
         return losses
 
+    def loss_boxes(
+        self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp
+    ):
 
-    def loss_boxes(self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp):
-
-        assert 'pred_boxes' in outputs
+        assert "pred_boxes" in outputs
         idx = self._get_src_permutation_idx(indices)
-        src_boxes = outputs['pred_boxes'][idx]
-        target_boxes = torch.cat([t['boxes'][i] for t, (_, i) in zip(targets, indices)], dim=0)
+        src_boxes = outputs["pred_boxes"][idx]
+        target_boxes = torch.cat(
+            [t["boxes"][i] for t, (_, i) in zip(targets, indices)], dim=0
+        )
 
-        loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction='none')
+        loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction="none")
 
         losses = {}
-        losses['loss_bbox'] = loss_bbox.sum() / num_boxes
+        losses["loss_bbox"] = loss_bbox.sum() / num_boxes
 
-        loss_giou = 1 - torch.diag(box_ops.generalized_box_iou(
-            box_ops.box_cxcywh_to_xyxy(src_boxes),
-            box_ops.box_cxcywh_to_xyxy(target_boxes)))
-        losses['loss_giou'] = loss_giou.sum() / num_boxes
+        loss_giou = 1 - torch.diag(
+            box_ops.generalized_box_iou(
+                box_ops.box_cxcywh_to_xyxy(src_boxes),
+                box_ops.box_cxcywh_to_xyxy(target_boxes),
+            )
+        )
+        losses["loss_giou"] = loss_giou.sum() / num_boxes
         return losses
 
+    def loss_grasp_class(
+        self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp
+    ):
 
-    def loss_grasp_class(self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp):
+        assert "pred_logits_grasp" in outputs
 
-        assert 'pred_logits_grasp' in outputs
-
-        src_logits = outputs['pred_logits_grasp']
+        src_logits = outputs["pred_logits_grasp"]
 
         idx = self._get_src_permutation_idx(indices_grasp)
-        target_classes_o = torch.cat([t["grasp_classes"][J] for t, (_, J) in zip(targets, indices_grasp)]) 
-        target_classes = torch.full(src_logits.shape[:2], self.num_classes,
-                                    dtype=torch.int64, device=src_logits.device) 
-        target_classes[idx] = target_classes_o  
-        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2] + 1],
-                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device)
-        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)  
-        target_classes_onehot = target_classes_onehot[:,:,:-1]
-        loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_grasp_boxes, alpha=self.focal_alpha, gamma=2) * src_logits.shape[1]
-        losses = {'loss_grasp_ce': loss_ce}
+        target_classes_o = torch.cat(
+            [t["grasp_classes"][J] for t, (_, J) in zip(targets, indices_grasp)]
+        )
+        target_classes = torch.full(
+            src_logits.shape[:2],
+            self.num_classes,
+            dtype=torch.int64,
+            device=src_logits.device,
+        )
+        target_classes[idx] = target_classes_o
+        target_classes_onehot = torch.zeros(
+            [src_logits.shape[0], src_logits.shape[1], src_logits.shape[2] + 1],
+            dtype=src_logits.dtype,
+            layout=src_logits.layout,
+            device=src_logits.device,
+        )
+        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
+        target_classes_onehot = target_classes_onehot[:, :, :-1]
+        loss_ce = (
+            sigmoid_focal_loss(
+                src_logits,
+                target_classes_onehot,
+                num_grasp_boxes,
+                alpha=self.focal_alpha,
+                gamma=2,
+            )
+            * src_logits.shape[1]
+        )
+        losses = {"loss_grasp_ce": loss_ce}
 
         return losses
 
-    def loss_grasp_angle(self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp):
-        
-        assert 'pred_angles_grasp' in outputs
+    def loss_grasp_angle(
+        self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp
+    ):
 
-        src_logits = outputs['pred_angles_grasp']
+        assert "pred_angles_grasp" in outputs
+
+        src_logits = outputs["pred_angles_grasp"]
 
         idx = self._get_src_permutation_idx(indices_grasp)
-        target_classes_o = torch.cat([t["grasp_angles_cls"][J] for t, (_, J) in zip(targets, indices_grasp)])
-        target_classes = torch.full(src_logits.shape[:2], 19,
-                                    dtype=torch.int64, device=src_logits.device)
-        target_classes[idx] = target_classes_o 
+        target_classes_o = torch.cat(
+            [t["grasp_angles_cls"][J] for t, (_, J) in zip(targets, indices_grasp)]
+        )
+        target_classes = torch.full(
+            src_logits.shape[:2], 19, dtype=torch.int64, device=src_logits.device
+        )
+        target_classes[idx] = target_classes_o
 
-        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2] + 1],
-                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device)
-        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1) 
+        target_classes_onehot = torch.zeros(
+            [src_logits.shape[0], src_logits.shape[1], src_logits.shape[2] + 1],
+            dtype=src_logits.dtype,
+            layout=src_logits.layout,
+            device=src_logits.device,
+        )
+        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
 
-        target_classes_onehot = target_classes_onehot[:,:,:-1]
-        loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_grasp_boxes, alpha=self.focal_alpha, gamma=2) * src_logits.shape[1]
-        losses = {'loss_grasp_angle': loss_ce}
+        target_classes_onehot = target_classes_onehot[:, :, :-1]
+        loss_ce = (
+            sigmoid_focal_loss(
+                src_logits,
+                target_classes_onehot,
+                num_grasp_boxes,
+                alpha=self.focal_alpha,
+                gamma=2,
+            )
+            * src_logits.shape[1]
+        )
+        losses = {"loss_grasp_angle": loss_ce}
 
         return losses
 
-    def angle_focal_loss(self, inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2):
+    def angle_focal_loss(
+        self, inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2
+    ):
 
         prob = inputs
         ce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
@@ -470,51 +657,77 @@ class SetCriterion(nn.Module):
 
         return loss.mean(1).sum() / num_boxes
 
+    def loss_grasp_bbox(
+        self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp
+    ):
 
-
-    def loss_grasp_bbox(self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp):
-
-        assert 'pred_boxes_grasp' in outputs
+        assert "pred_boxes_grasp" in outputs
 
         idx = self._get_src_permutation_idx(indices_grasp)
-        src_boxes = outputs['pred_boxes_grasp'][idx]
-        target_boxes = torch.cat([t['grasp_points'][i].view(-1, 4, 2).mean(dim=1) for t, (_, i) in zip(targets, indices_grasp)], dim=0)
+        src_boxes = outputs["pred_boxes_grasp"][idx]
+        target_boxes = torch.cat(
+            [
+                t["grasp_points"][i].view(-1, 4, 2).mean(dim=1)
+                for t, (_, i) in zip(targets, indices_grasp)
+            ],
+            dim=0,
+        )
 
-        target_w = torch.cat([t['grasp_widths'][i].unsqueeze(-1) for t, (_, i) in zip(targets, indices_grasp)], dim=0)
-        target_h = torch.cat([t['grasp_heights'][i].unsqueeze(-1) for t, (_, i) in zip(targets, indices_grasp)], dim=0)
+        target_w = torch.cat(
+            [
+                t["grasp_widths"][i].unsqueeze(-1)
+                for t, (_, i) in zip(targets, indices_grasp)
+            ],
+            dim=0,
+        )
+        target_h = torch.cat(
+            [
+                t["grasp_heights"][i].unsqueeze(-1)
+                for t, (_, i) in zip(targets, indices_grasp)
+            ],
+            dim=0,
+        )
 
         target_combined = torch.cat((target_boxes, target_w, target_h), dim=1)
 
         losses = {}
 
-        loss_bbox = F.smooth_l1_loss(src_boxes, target_combined, reduction='none')
-        losses['loss_grasp_box'] = loss_bbox.sum() / num_grasp_boxes
+        loss_bbox = F.smooth_l1_loss(src_boxes, target_combined, reduction="none")
+        losses["loss_grasp_box"] = loss_bbox.sum() / num_grasp_boxes
 
-        out_angle = outputs['pred_angles_grasp'][idx] 
+        out_angle = outputs["pred_angles_grasp"][idx]
         max_indices = torch.argmax(out_angle, dim=1)
         real_angle = (max_indices.unsqueeze(1) - 8) * 10 - 5
 
-        tgt_angle = torch.cat([t['grasp_angles'][i].unsqueeze(-1) for t, (_, i) in zip(targets, indices_grasp)], dim=0)
+        tgt_angle = torch.cat(
+            [
+                t["grasp_angles"][i].unsqueeze(-1)
+                for t, (_, i) in zip(targets, indices_grasp)
+            ],
+            dim=0,
+        )
 
-        out_grasp = torch.cat((src_boxes * 10, real_angle),dim=1).unsqueeze(0)
-        tgt_grasp = torch.cat((target_combined * 10, tgt_angle),dim=1).unsqueeze(0)
+        out_grasp = torch.cat((src_boxes * 10, real_angle), dim=1).unsqueeze(0)
+        tgt_grasp = torch.cat((target_combined * 10, tgt_angle), dim=1).unsqueeze(0)
 
         eiou_loss = cal_eiou(out_grasp, tgt_grasp).squeeze(0)
 
         loss = eiou_loss
-        losses['loss_grasp_ious'] = loss.sum() / num_grasp_boxes
+        losses["loss_grasp_ious"] = loss.sum() / num_grasp_boxes
 
         return losses
 
-    def loss_adj_matrix(self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp):
+    def loss_adj_matrix(
+        self, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp
+    ):
         """
         Adjacency matrix loss
         Ap -> Am
         """
-        assert 'pred_adj' in outputs
-        pred_adj = outputs['pred_adj'] 
+        assert "pred_adj" in outputs
+        pred_adj = outputs["pred_adj"]
 
-        loss_adjs=[]
+        loss_adjs = []
 
         for batch_idx, (src_idx, tgt_idx) in enumerate(indices):
 
@@ -522,70 +735,109 @@ class SetCriterion(nn.Module):
             pred_adj_perm = pred_adj_part.clone()
             for i in range(len(tgt_idx)):
                 for j in range(len(tgt_idx)):
-                    pred_adj_perm[tgt_idx[i],tgt_idx[j]]=pred_adj_part[i,j]
+                    pred_adj_perm[tgt_idx[i], tgt_idx[j]] = pred_adj_part[i, j]
 
             target_adj = targets[batch_idx]["adj"]
 
             pred_adj_perm = pred_adj_perm.float()
 
             target_adj = target_adj.float()
-
-            loss_adj = torch.nn.functional.binary_cross_entropy_with_logits(
-                pred_adj_perm, target_adj, reduction='sum')/num_boxes
+            print(f"pred_adj:{pred_adj_perm}, target_adj:{target_adj}")
+            loss_adj = (
+                torch.nn.functional.binary_cross_entropy_with_logits(
+                    pred_adj_perm, target_adj, reduction="sum"
+                )
+                / num_boxes
+            )
             loss_adjs.append(loss_adj)
 
-        losses = {'loss_adj': sum(loss_adjs)}
+        losses = {"loss_adj": sum(loss_adjs)}
 
         return losses
 
     def _get_src_permutation_idx(self, indices):
 
-        batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(indices)])
+        batch_idx = torch.cat(
+            [torch.full_like(src, i) for i, (src, _) in enumerate(indices)]
+        )
         src_idx = torch.cat([src for (src, _) in indices])
         return batch_idx, src_idx
 
     def _get_tgt_permutation_idx(self, indices):
 
-        batch_idx = torch.cat([torch.full_like(tgt, i) for i, (_, tgt) in enumerate(indices)])
+        batch_idx = torch.cat(
+            [torch.full_like(tgt, i) for i, (_, tgt) in enumerate(indices)]
+        )
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def get_loss(self, loss, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp, **kwargs):
+    def get_loss(
+        self,
+        loss,
+        outputs,
+        targets,
+        num_boxes,
+        indices,
+        num_grasp_boxes,
+        indices_grasp,
+        **kwargs,
+    ):
 
         loss_map = {
-            'labels': self.loss_labels,
-            'boxes': self.loss_boxes,
-            'grasp_class':self.loss_grasp_class,
-            'grasp_bbox':self.loss_grasp_bbox,
-            'grasp_angle':self.loss_grasp_angle,
-            'adj':self.loss_adj_matrix,
+            "labels": self.loss_labels,
+            "boxes": self.loss_boxes,
+            "grasp_class": self.loss_grasp_class,
+            "grasp_bbox": self.loss_grasp_bbox,
+            "grasp_angle": self.loss_grasp_angle,
+            "adj": self.loss_adj_matrix,
         }
-        assert loss in loss_map, f'do you really want to compute {loss} loss?'
+        assert loss in loss_map, f"do you really want to compute {loss} loss?"
 
-        return loss_map[loss](outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp, **kwargs)
-
+        return loss_map[loss](
+            outputs,
+            targets,
+            num_boxes,
+            indices,
+            num_grasp_boxes,
+            indices_grasp,
+            **kwargs,
+        )
 
     def forward(self, outputs, targets):
-        """ This performs the loss computation.
+        """This performs the loss computation.
         Parameters:
              outputs: dict of tensors, see the output specification of the model for the format
              targets: list of dicts, such that len(targets) == batch_size.
                       The expected keys in each dict depends on the losses applied, see each loss' doc
         """
-        outputs_without_aux = {k: v for k, v in outputs.items() if k != 'aux_outputs' and k != 'enc_outputs'}
+        outputs_without_aux = {
+            k: v
+            for k, v in outputs.items()
+            if k != "aux_outputs" and k != "enc_outputs"
+        }
 
         indices = self.matcher(outputs_without_aux, targets)
-        train_grasps = any(loss.startswith('grasp_') for loss in self.losses)
-        indices_grasp = self.matcher_grasp(outputs_without_aux, targets) if train_grasps else None
+        train_grasps = any(loss.startswith("grasp_") for loss in self.losses)
+        indices_grasp = (
+            self.matcher_grasp(outputs_without_aux, targets) if train_grasps else None
+        )
 
         num_boxes = sum(len(t["labels"]) for t in targets)
-        num_boxes = torch.as_tensor([num_boxes], dtype=torch.float, device=next(iter(outputs.values())).device)
+        num_boxes = torch.as_tensor(
+            [num_boxes], dtype=torch.float, device=next(iter(outputs.values())).device
+        )
         if is_dist_avail_and_initialized():
             torch.distributed.all_reduce(num_boxes)
         num_boxes = torch.clamp(num_boxes / get_world_size(), min=1).item()
 
-        num_grasp_boxes = sum(len(t["grasp_classes"]) for t in targets) if train_grasps else 0
-        num_grasp_boxes = torch.as_tensor([num_grasp_boxes], dtype=torch.float, device=next(iter(outputs.values())).device)
+        num_grasp_boxes = (
+            sum(len(t["grasp_classes"]) for t in targets) if train_grasps else 0
+        )
+        num_grasp_boxes = torch.as_tensor(
+            [num_grasp_boxes],
+            dtype=torch.float,
+            device=next(iter(outputs.values())).device,
+        )
         if is_dist_avail_and_initialized():
             torch.distributed.all_reduce(num_grasp_boxes)
         num_grasp_boxes = torch.clamp(num_grasp_boxes / get_world_size(), min=1).item()
@@ -593,36 +845,65 @@ class SetCriterion(nn.Module):
         losses = {}
         for loss in self.losses:
             kwargs = {}
-            losses.update(self.get_loss(loss, outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp, **kwargs))
+            losses.update(
+                self.get_loss(
+                    loss,
+                    outputs,
+                    targets,
+                    num_boxes,
+                    indices,
+                    num_grasp_boxes,
+                    indices_grasp,
+                    **kwargs,
+                )
+            )
 
-
-        if 'aux_outputs' in outputs:
-            for i, aux_outputs in enumerate(outputs['aux_outputs']):
+        if "aux_outputs" in outputs:
+            for i, aux_outputs in enumerate(outputs["aux_outputs"]):
                 indices = self.matcher(aux_outputs, targets)
-                indices_grasp = self.matcher_grasp(aux_outputs, targets) if train_grasps else None
+                indices_grasp = (
+                    self.matcher_grasp(aux_outputs, targets) if train_grasps else None
+                )
                 for loss in self.losses:
                     kwargs = {}
-                    l_dict = self.get_loss(loss, aux_outputs, targets, num_boxes, indices, num_grasp_boxes, indices_grasp, **kwargs)
-                    l_dict = {k + f'_{i}': v for k, v in l_dict.items()}
+                    l_dict = self.get_loss(
+                        loss,
+                        aux_outputs,
+                        targets,
+                        num_boxes,
+                        indices,
+                        num_grasp_boxes,
+                        indices_grasp,
+                        **kwargs,
+                    )
+                    l_dict = {k + f"_{i}": v for k, v in l_dict.items()}
                     losses.update(l_dict)
 
-        if 'enc_outputs' in outputs:
-            enc_outputs = outputs['enc_outputs']
+        if "enc_outputs" in outputs:
+            enc_outputs = outputs["enc_outputs"]
             bin_targets = copy.deepcopy(targets)
             for bt in bin_targets:
-                bt['labels'] = torch.zeros_like(bt['labels'])
+                bt["labels"] = torch.zeros_like(bt["labels"])
 
             indices = self.matcher(enc_outputs, bin_targets)
             for loss in self.losses:
                 # Encoder proposals supervise object classes/boxes, not grasp or adjacency heads.
-                if loss not in ('labels', 'boxes'):
+                if loss not in ("labels", "boxes"):
                     continue
                 kwargs = {}
-                if loss == 'labels':
-                    kwargs['log'] = False
-                l_dict = self.get_loss(loss, enc_outputs, bin_targets, num_boxes, indices,
-                                       num_grasp_boxes, None, **kwargs)
-                l_dict = {k + f'_enc': v for k, v in l_dict.items()}
+                if loss == "labels":
+                    kwargs["log"] = False
+                l_dict = self.get_loss(
+                    loss,
+                    enc_outputs,
+                    bin_targets,
+                    num_boxes,
+                    indices,
+                    num_grasp_boxes,
+                    None,
+                    **kwargs,
+                )
+                l_dict = {k + f"_enc": v for k, v in l_dict.items()}
                 losses.update(l_dict)
 
         return losses
@@ -633,26 +914,32 @@ class PostProcess(nn.Module):
     @torch.no_grad()
     def forward(self, outputs, target_sizes):
 
-        out_logits, out_bbox = outputs['pred_logits'], outputs['pred_boxes']
+        out_logits, out_bbox = outputs["pred_logits"], outputs["pred_boxes"]
 
         assert len(out_logits) == len(target_sizes)
         assert target_sizes.shape[1] == 2
 
         prob = out_logits.sigmoid()
-        topk_values, topk_indexes = torch.topk(prob.view(out_logits.shape[0], -1), 100, dim=1)
+        topk_values, topk_indexes = torch.topk(
+            prob.view(out_logits.shape[0], -1), 100, dim=1
+        )
         scores = topk_values
         topk_boxes = topk_indexes // out_logits.shape[2]
         labels = topk_indexes % out_logits.shape[2]
         boxes = box_ops.box_cxcywh_to_xyxy(out_bbox)
-        boxes = torch.gather(boxes, 1, topk_boxes.unsqueeze(-1).repeat(1,1,4))
+        boxes = torch.gather(boxes, 1, topk_boxes.unsqueeze(-1).repeat(1, 1, 4))
 
         img_h, img_w = target_sizes.unbind(1)
         scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
         boxes = boxes * scale_fct[:, None, :]
 
-        results = [{'scores': s, 'labels': l, 'boxes': b} for s, l, b in zip(scores, labels, boxes)]
+        results = [
+            {"scores": s, "labels": l, "boxes": b}
+            for s, l, b in zip(scores, labels, boxes)
+        ]
 
         return results
+
 
 class AdaptivePooling(nn.Module):
     def __init__(self, hidden_dim, output_dim, output_tokens):
@@ -660,24 +947,29 @@ class AdaptivePooling(nn.Module):
         self.output_tokens = output_tokens
         self.fc = nn.Linear(hidden_dim, output_dim)
         self.adaptive_pool = nn.AdaptiveAvgPool1d(output_tokens)
+
     def forward(self, x):
 
         batch_size, num_tokens, hidden_dim = x.shape
 
-        x = x.permute(0, 2, 1) 
-        x = self.adaptive_pool(x) 
-        x = x.permute(0, 2, 1)  
+        x = x.permute(0, 2, 1)
+        x = self.adaptive_pool(x)
+        x = x.permute(0, 2, 1)
 
-        x = self.fc(x) 
+        x = self.fc(x)
         return x
+
+
 class MLP(nn.Module):
-    """ Very simple multi-layer perceptron (also called FFN)"""
+    """Very simple multi-layer perceptron (also called FFN)"""
 
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers):
         super().__init__()
         self.num_layers = num_layers
         h = [hidden_dim] * (num_layers - 1)
-        self.layers = nn.ModuleList(nn.Linear(n, k) for n, k in zip([input_dim] + h, h + [output_dim]))
+        self.layers = nn.ModuleList(
+            nn.Linear(n, k) for n, k in zip([input_dim] + h, h + [output_dim])
+        )
 
     def forward(self, x):
         for i, layer in enumerate(self.layers):
@@ -687,6 +979,7 @@ class MLP(nn.Module):
 
 def build_dab_deformable_detr(args):
     from util.dataset_config import get_num_classes
+
     num_classes = get_num_classes(args)
 
     device = torch.device(args.device)
@@ -704,39 +997,48 @@ def build_dab_deformable_detr(args):
         two_stage=args.two_stage,
         use_dab=True,
         num_patterns=args.num_patterns,
-        random_refpoints_xy=args.random_refpoints_xy
+        random_refpoints_xy=args.random_refpoints_xy,
     )
     if args.masks:
         model = DETRsegm(model, freeze_detr=(args.frozen_weights is not None))
     matcher, matcher_grasp = build_matcher(args)
 
     weight_dict = {
-                    'loss_ce': args.cls_loss_coef,
-                    'loss_bbox': args.bbox_loss_coef,
-                    'loss_giou': args.giou_loss_coef,                    
-                    'loss_grasp_ce':args.grasp_ce_loss_coef, 
-                    'loss_grasp_angle':args.grasp_angle_loss_coef,
-                    'loss_grasp_ious':args.grasp_ious_loss_coef,
-                    'loss_grasp_box':args.grasp_box_loss_coef,
-                    'loss_adj':args.adj_loss_coef, 
-                   }
+        "loss_ce": args.cls_loss_coef,
+        "loss_bbox": args.bbox_loss_coef,
+        "loss_giou": args.giou_loss_coef,
+        "loss_grasp_ce": args.grasp_ce_loss_coef,
+        "loss_grasp_angle": args.grasp_angle_loss_coef,
+        "loss_grasp_ious": args.grasp_ious_loss_coef,
+        "loss_grasp_box": args.grasp_box_loss_coef,
+        "loss_adj": args.adj_loss_coef,
+    }
 
-    if getattr(args, 'no_grasps', False):
-        weight_dict = {k: v for k, v in weight_dict.items() if not k.startswith('loss_grasp_')}
+    if getattr(args, "no_grasps", False):
+        weight_dict = {
+            k: v for k, v in weight_dict.items() if not k.startswith("loss_grasp_")
+        }
 
     if args.aux_loss:
         aux_weight_dict = {}
         for i in range(args.dec_layers - 1):
-            aux_weight_dict.update({k + f'_{i}': v for k, v in weight_dict.items()})
-        aux_weight_dict.update({k + f'_enc': v for k, v in weight_dict.items()})
+            aux_weight_dict.update({k + f"_{i}": v for k, v in weight_dict.items()})
+        aux_weight_dict.update({k + f"_enc": v for k, v in weight_dict.items()})
         weight_dict.update(aux_weight_dict)
 
-    losses = ['labels', 'boxes', 'grasp_class', 'grasp_bbox', 'grasp_angle', 'adj']
-    if getattr(args, 'no_grasps', False):
-        losses = ['labels', 'boxes', 'adj']
+    losses = ["labels", "boxes", "grasp_class", "grasp_bbox", "grasp_angle", "adj"]
+    if getattr(args, "no_grasps", False):
+        losses = ["labels", "boxes", "adj"]
 
-    criterion = SetCriterion(num_classes, weight_dict, losses, focal_alpha=args.focal_alpha, matcher = matcher, matcher_grasp = matcher_grasp)
+    criterion = SetCriterion(
+        num_classes,
+        weight_dict,
+        losses,
+        focal_alpha=args.focal_alpha,
+        matcher=matcher,
+        matcher_grasp=matcher_grasp,
+    )
     criterion.to(device)
-    postprocessors = {'bbox': PostProcess()}
+    postprocessors = {"bbox": PostProcess()}
 
     return model, criterion, postprocessors

@@ -11,7 +11,62 @@ from contextlib import redirect_stdout, redirect_stderr
 import evaluate_dataset
 
 
+BBOX_RESULT = dict(total_objects=2, bbox_tp=1, bbox_fp=0, bbox_fn=0, bbox_missing_objects=0,
+                   bbox_extra_detections=0, bbox_extra_relation_fp=0,
+                   bbox_image_correct=1)
+
+
 class EvaluateDatasetTests(unittest.TestCase):
+    def test_box_only_metrics_are_saved_and_aggregated_separately(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            result = dict(total_objects=3, tp=0, fp=1, fn=1, missing_objects=1,
+                          extra_detections=1, extra_relation_fp=1, image_correct=0,
+                          bbox_tp=1, bbox_fp=0, bbox_fn=0, bbox_missing_objects=0,
+                          bbox_extra_detections=0, bbox_extra_relation_fp=0,
+                          bbox_image_correct=1)
+            second_result = dict(result, total_objects=5, tp=1, fp=0, fn=2,
+                                 bbox_tp=2, bbox_fp=1, bbox_fn=1, bbox_image_correct=0)
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                evaluate_dataset.evaluate_split(
+                    [root / 'one.png', root / 'two.png'], object(),
+                    Mock(side_effect=[result, second_result]), root, 'test', save_images=False)
+            with (root / 'visualizations/test/results.csv').open() as file:
+                rows = list(csv.DictReader(file))
+            self.assertEqual(len(rows), 2)
+            self.assertEqual([row['total_objects'] for row in rows], ['3', '5'])
+            self.assertIn('Total objects: 8\nTotal missing objects: 2', stdout.getvalue())
+            self.assertEqual(rows[0]['tp'], '0')
+            self.assertEqual(rows[0]['bbox_tp'], '1')
+            self.assertEqual(rows[0]['bbox_image_correct'], '1')
+            self.assertEqual(rows[0]['precision'], '0.0')
+            self.assertEqual(rows[0]['recall'], '0.0')
+            self.assertEqual(rows[0]['image_accuracy'], '0.0')
+            self.assertEqual(rows[0]['bbox_precision'], '1.0')
+            self.assertEqual(rows[0]['bbox_recall'], '1.0')
+            self.assertEqual(rows[0]['bbox_image_accuracy'], '1.0')
+            with (root / 'visualizations/test/summary.csv').open() as file:
+                summary = {row['evaluation']: row for row in csv.DictReader(file)}
+            self.assertEqual(float(summary['class_aware']['recall']), 0.25)
+            self.assertEqual(float(summary['class_aware']['precision']), 0.5)
+            self.assertEqual(float(summary['class_aware']['image_accuracy']), 0.0)
+            self.assertEqual(float(summary['box_only']['recall']), 0.75)
+            self.assertEqual(float(summary['box_only']['precision']), 0.75)
+            self.assertEqual(float(summary['box_only']['image_accuracy']), 0.5)
+            self.assertIn('Class-aware micro edge recall: 25.0', stdout.getvalue())
+            self.assertIn('Class-aware micro edge precision: 50.0', stdout.getvalue())
+            self.assertIn('Class-aware image accuracy: 0.0', stdout.getvalue())
+            self.assertIn('Box-only image accuracy: 50.0', stdout.getvalue())
+            for metric in ('recall', 'precision', 'F1'):
+                self.assertIn(f'Box-only micro edge {metric}: 75.0', stdout.getvalue())
+
+    def test_undefined_scores_remain_unavailable(self):
+        self.assertEqual(evaluate_dataset.calculate_scores(0, 0, 0, 0, 0),
+                         dict(recall=None, precision=None, f1=None, image_accuracy=None))
+        self.assertEqual(evaluate_dataset.calculate_scores(0, 0, 0, 1, 1),
+                         dict(recall=None, precision=None, f1=None, image_accuracy=1.0))
+
     def test_visualization_failure_does_not_remove_successful_metrics(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -19,7 +74,7 @@ class EvaluateDatasetTests(unittest.TestCase):
             image.touch()
             evaluate = Mock(return_value=dict(tp=1, fp=0, fn=0, missing_objects=0,
                                              extra_detections=0, extra_relation_fp=0,
-                                             image_correct=1, prediction={}))
+                                             image_correct=1, **BBOX_RESULT, prediction={}))
             stdout = io.StringIO()
             with patch.object(evaluate_dataset, 'save_visualizations', side_effect=OSError('disk error')), \
                     redirect_stdout(stdout):
@@ -44,6 +99,12 @@ class EvaluateDatasetTests(unittest.TestCase):
                                                 root, 'test', save_images=False)
             with csv_path.open() as file:
                 self.assertEqual(list(csv.DictReader(file)), [])
+            with (csv_path.parent / 'summary.csv').open() as file:
+                for row in csv.DictReader(file):
+                    self.assertEqual(row['images_evaluated'], '0')
+                    self.assertEqual(row['precision'], '')
+                    self.assertEqual(row['recall'], '')
+                    self.assertEqual(row['image_accuracy'], '')
             self.assertNotIn('old.png', csv_path.read_text())
             self.assertIn('bad annotation', (root / 'visualizations/test/errors.txt').read_text())
 
@@ -61,7 +122,7 @@ class EvaluateDatasetTests(unittest.TestCase):
                 load_model=Mock(return_value=model),
                 evaluate_one_image=Mock(return_value=dict(
                     tp=1, fp=0, fn=0, missing_objects=0, extra_detections=0,
-                    extra_relation_fp=0, image_correct=1, prediction=prediction)),
+                    extra_relation_fp=0, image_correct=1, **BBOX_RESULT, prediction=prediction)),
             )
             output = Path(directory) / "results"
             argv = ["evaluate_dataset.py", "--dataset-root", str(root),
@@ -119,7 +180,7 @@ class EvaluateDatasetTests(unittest.TestCase):
                 load_model=Mock(return_value=object()),
                 evaluate_one_image=Mock(return_value=dict(
                     tp=0, fp=0, fn=0, missing_objects=0, extra_detections=0,
-                    extra_relation_fp=0, image_correct=1, prediction=prediction)),
+                    extra_relation_fp=0, image_correct=1, **BBOX_RESULT, prediction=prediction)),
             )
             output = Path(directory) / "metrics"
             images = Path(directory) / "custom_images"
@@ -150,7 +211,7 @@ class EvaluateDatasetTests(unittest.TestCase):
                 load_model=Mock(return_value=model),
                 evaluate_one_image=Mock(return_value=dict(
                     tp=1, fp=0, fn=0, missing_objects=0, extra_detections=0,
-                    extra_relation_fp=0, image_correct=1)),
+                    extra_relation_fp=0, image_correct=1, **BBOX_RESULT)),
             )
             output = Path(directory) / "results"
             argv = ["evaluate_dataset.py", "--dataset-root", str(root),
@@ -197,7 +258,7 @@ class EvaluateDatasetTests(unittest.TestCase):
                         missing_objects=0,
                         extra_detections=0,
                         extra_relation_fp=0,
-                        image_correct=1,
+                        image_correct=1, **BBOX_RESULT,
                     )
                 ),
             )
@@ -277,7 +338,7 @@ class EvaluateDatasetTests(unittest.TestCase):
                 load_model=Mock(return_value=model),
                 evaluate_one_image=Mock(return_value=dict(
                     tp=1, fp=0, fn=0, missing_objects=0, extra_detections=0,
-                    extra_relation_fp=0, image_correct=1, prediction=prediction)),
+                    extra_relation_fp=0, image_correct=1, **BBOX_RESULT, prediction=prediction)),
             )
             output = Path(directory) / "results"
             with patch.object(sys, "argv", ["evaluate_dataset.py", "--dataset-root",
@@ -292,7 +353,7 @@ class EvaluateDatasetTests(unittest.TestCase):
                     root / "images" / split / "one.png", model, return_predictions=True)
                 images = output / "visualizations" / f"dataset_{split}"
                 self.assertEqual({p.name for p in images.iterdir()},
-                                 {"one.png_relationships.jpg", "results.csv", "errors.txt"})
+                                 {"one.png_relationships.jpg", "results.csv", "summary.csv", "errors.txt"})
                 with Image.open(images / "one.png_relationships.jpg") as relationships:
                     self.assertGreater(relationships.width, 320)
                     self.assertGreaterEqual(relationships.height, 240)
