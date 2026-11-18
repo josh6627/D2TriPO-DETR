@@ -1,4 +1,0 @@
-[10/28 15:38:01.291]: git:
-  sha: cf7c8e6defcf78faeb1ea9649558846670cd1285, status: has uncommited changes, branch: main
-
-[10/28 15:38:01.292]: Command: main.py --eval --resume checkpoints/checkpoint0110.pth --batch_size 1
