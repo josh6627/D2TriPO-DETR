@@ -28,6 +28,42 @@ class SplitExportTests(unittest.TestCase):
         self.project.set_test_image('2.png', True)
         self.project.set_test_image('9.png', True)
 
+    def test_imported_splits_remain_fixed_for_full_and_partial_exports(self):
+        fixed = {name: ('test' if name in ('2.png', '9.png', '10.png') else
+                        'val' if name in ('3.png', '4.png') else 'train')
+                 for name in self.project.files}
+        self.project.data['imported_splits'] = fixed
+        self.project.data['test_images'] = [n for n, split in fixed.items() if split == 'test']
+        self.project.save()
+        reopened = Project(self.images, self.project.path)
+        self.assertEqual(reopened.fixed_splits, fixed)
+        for seed in (42, 999):
+            output = reopened.export(self.root/f'imported_{seed}', seed=seed)
+            manifest = json.loads((output/'manifest.json').read_text())
+            self.assertEqual(manifest['split_counts'], dict(train=5, val=2, test=3))
+            self.assertEqual(manifest['split_policy'], 'preserve_imported')
+            self.assertEqual({s['image']: s['split'] for s in manifest['samples'].values()}, fixed)
+        # No target-ratio check may move reviewed images out of their original split.
+        for name in reopened.files:
+            reopened.sample(name)['complete'] = name in ('1.png', '2.png', '3.png')
+        output = reopened.export(self.root/'partial_imported')
+        manifest = json.loads((output/'manifest.json').read_text())
+        self.assertEqual(manifest['split_counts'], dict(train=1, val=1, test=1))
+        for sample in manifest['samples'].values():
+            self.assertEqual(sample['split'], fixed[sample['image']])
+        with self.assertRaisesRegex(ValueError, 'fixed'):
+            reopened.set_test_image('1.png', True)
+        with self.assertRaisesRegex(ValueError, 'fixed'):
+            reopened.set_split_fractions(.1, .2)
+        with self.assertRaisesRegex(ValueError, 'fixed'):
+            reopened.export(self.root/'override', test_fraction=.2)
+
+    def test_imported_split_map_must_cover_every_image(self):
+        self.project.data['imported_splits'] = {'1.png': 'train'}
+        with self.assertRaisesRegex(ValueError, 'valid original split'):
+            self.project.export(self.root/'bad_import')
+        self.assertFalse((self.root/'bad_import').exists())
+
     def test_exact_70_10_20_and_manual_membership(self):
         self.mark_test()
         output=self.project.export(self.root/'export')

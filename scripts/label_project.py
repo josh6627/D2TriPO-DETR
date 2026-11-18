@@ -12,6 +12,24 @@ except ImportError:
 
 EXTENSIONS = {'.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp'}
 SPLITS = ('train', 'val', 'test')
+RELATION_NAMES = {1: 'Overlap / stacking', 2: 'Proximity / grasp obstruction'}
+
+
+def edge_parts(edge):
+    """Legacy [source, target] edges are class 1; typed edges add a class ID."""
+    if not isinstance(edge, (list, tuple)) or len(edge) not in (2, 3):
+        raise ValueError('Relationships need source, target, and optional class 1 or 2.')
+    source, target = edge[:2]
+    kind = edge[2] if len(edge) == 3 else 1
+    if any(type(value) is not int for value in (source, target, kind)) or kind not in RELATION_NAMES:
+        raise ValueError('Relationship IDs must be integers and class must be 1 or 2.')
+    return source, target, kind
+
+
+def edge_description(edge):
+    source, target, kind = edge_parts(edge)
+    action = 'is above / occludes' if kind == 1 else 'obstructs grasping'
+    return f'#{source} → #{target}: #{source} {action} #{target}'
 
 
 def split_fractions(val_fraction=.1, test_fraction=.2):
@@ -69,15 +87,22 @@ def validate(sample, classes, size, complete=False, require_grasps=True):
                 or any(abs(vectors[1][j]+vectors[3][j]) > 1e-5 for j in range(2))):
             raise ValueError('Grasp corners must form an ordered rectangle.')
     graph = {i: set() for i in ids}
-    for above, below in edges:
+    pairs = set()
+    for edge in edges:
+        above, below, kind = edge_parts(edge)
         if above not in graph or below not in graph or above == below:
             raise ValueError('Relationships need two different existing objects.')
-        graph[above].add(below)
+        if (above, below) in pairs:
+            raise ValueError('Use one relationship per directed pair; overlap/stacking takes priority.')
+        pairs.add((above, below))
+        # Only stacking must be acyclic. Mutual grasp obstruction is possible.
+        if kind == 1:
+            graph[above].add(below)
     remaining = set(ids)
     while remaining:
         leaves = {i for i in remaining if not (graph[i] & remaining)}
         if not leaves:
-            raise ValueError('Relationships form a cycle. Use above → below only.')
+            raise ValueError('Overlap/stacking relationships form a cycle. Use above → below only.')
         remaining -= leaves
     if complete:
         if not objects:
@@ -86,7 +111,7 @@ def validate(sample, classes, size, complete=False, require_grasps=True):
         if require_grasps and missing:
             raise ValueError(f'Add at least one grasp for each object; missing: {sorted(missing)}')
         if not sample.get('relations_reviewed'):
-            raise ValueError('Confirm that relationships have been reviewed (including no overlaps).')
+            raise ValueError('Confirm that relationships have been reviewed (including no dependencies).')
 
 
 class Project:
@@ -140,11 +165,19 @@ class Project:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         atomic_json(self.path, self.data)
 
+    @property
+    def fixed_splits(self):
+        return self.data.get('imported_splits')
+
     def set_split_fractions(self, val_fraction, test_fraction):
+        if self.fixed_splits is not None:
+            raise ValueError('Imported dataset splits are fixed and preserved on export.')
         self.data['split_fractions'] = split_fractions(val_fraction, test_fraction)
         self.save()
 
     def set_test_image(self, name, selected):
+        if self.fixed_splits is not None:
+            raise ValueError('Imported dataset splits are fixed and preserved on export.')
         if name not in self.files:
             raise ValueError(f'Unknown image: {name}')
         names = set(self.data['test_images'])
@@ -183,11 +216,11 @@ class Project:
             raise ValueError('Mark at least three images complete for train/validation/test export.')
         test_names = set(self.data['test_images']) & set(names)
         target = test_target(len(names), fractions['test'])
-        if len(test_names) != target:
+        if self.fixed_splits is None and len(test_names) != target:
             raise ValueError(f'Choose exactly {target} completed test images for the '
                              f'{fractions["test"]:.0%} target ({len(names)} completed images); '
                              f'currently selected {len(test_names)}. Test images are never chosen automatically.')
-        if len(names)-len(test_names) < 2:
+        if self.fixed_splits is None and len(names)-len(test_names) < 2:
             raise ValueError('Leave at least two completed images outside test for training and validation.')
         sizes = {}
         for name in names:
@@ -198,15 +231,34 @@ class Project:
                          require_grasps=self.require_grasps)
             except ValueError as exc:
                 raise ValueError(f'{name}: {exc}') from exc
-        shuffled = [n for n in names if n not in test_names]
-        random.Random(seed).shuffle(shuffled)
-        val_count = max(1, min(len(shuffled)-1, math.floor(len(names)*fractions['val']+.5)))
-        val_names = set(shuffled[:val_count])
-        counts = {'train': len(shuffled)-val_count, 'val': val_count, 'test': len(test_names)}
+        if self.fixed_splits is not None:
+            if val_fraction is not None or test_fraction is not None:
+                raise ValueError('Imported dataset splits are fixed; omit split fraction overrides.')
+            if any(self.fixed_splits.get(n) not in SPLITS for n in self.files):
+                raise ValueError('Every imported image must have a valid original split.')
+            test_names = {n for n in names if self.fixed_splits[n] == 'test'}
+            val_names = {n for n in names if self.fixed_splits[n] == 'val'}
+        else:
+            shuffled = [n for n in names if n not in test_names]
+            random.Random(seed).shuffle(shuffled)
+            val_count = max(1, min(len(shuffled)-1, math.floor(len(names)*fractions['val']+.5)))
+            val_names = set(shuffled[:val_count])
+        counts = {'train': len(names)-len(test_names)-len(val_names),
+                  'val': len(val_names), 'test': len(test_names)}
         manifest = {'version': 1, 'source': str(self.path), 'seed': seed,
                     'val_fraction': fractions['val'], 'test_fraction': fractions['test'],
                     'split_fractions': fractions, 'split_counts': counts,
                     'tasks': {'grasps': self.require_grasps}, 'samples': {}}
+        manifest['adjacency'] = {
+            'classes': {0: 'No dependency', **RELATION_NAMES},
+            'direction': 'Row/source object affects column/target object',
+            'meanings': {
+                1: 'Source is above or occludes target',
+                2: 'Source obstructs grasping/manipulating target',
+            },
+        }
+        if self.fixed_splits is not None:
+            manifest['split_policy'] = 'preserve_imported'
         # Build beside the destination, then rename so failures never leave a usable partial export.
         staging = output.with_name(output.name + '.exporting')
         if staging.exists():
@@ -229,8 +281,9 @@ class Project:
                 class_ids = {o['id']: o['class_id'] for o in objects}
                 labels = [' '.join(map(str, [o['class_id'], *o['box'], width, height])) for o in objects]
                 adj = [[0]*len(objects) for _ in objects]
-                for a, b in sample['edges']:
-                    adj[rows[a]][rows[b]] = 1
+                for edge in sample['edges']:
+                    a, b, kind = edge_parts(edge)
+                    adj[rows[a]][rows[b]] = kind
                 grasps = [' '.join(map(str, [*(v for p in g['points'] for v in p),
                                              g['difficulty'], g['object_id'], class_ids[g['object_id']]]))
                           for g in sample['grasps']]

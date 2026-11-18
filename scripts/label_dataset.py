@@ -17,9 +17,9 @@ from tkinter import filedialog, font as tkfont, messagebox, simpledialog, ttk
 from PIL import Image, ImageTk
 
 try:
-    from .label_project import Project, grasp_rectangle, validate
+    from .label_project import Project, grasp_rectangle, validate, edge_parts, edge_description, RELATION_NAMES
 except ImportError:
-    from label_project import Project, grasp_rectangle, validate
+    from label_project import Project, grasp_rectangle, validate, edge_parts, edge_description, RELATION_NAMES
 
 
 MAX_RENDER_PIXELS = 8_000_000
@@ -133,9 +133,13 @@ class Labeler:
             command=self.toggle_test_image,
         )
         self.test_checkbox.pack(side="left")
-        ttk.Button(
+        split_button = ttk.Button(
             split_controls, text="Split ratios...", command=self.edit_split_ratios
-        ).pack(side="right")
+        )
+        split_button.pack(side="right")
+        if project.fixed_splits is not None:
+            self.test_checkbox.state(["disabled"])
+            split_button.state(["disabled"])
         self.test_status_label = ttk.Label(
             root, textvariable=self.test_status, padding=(8, 0, 8, 8), wraplength=1300
         )
@@ -242,16 +246,32 @@ class Labeler:
             fill="x"
         )
         ttk.Label(
-            side, text="3. Above -> below relationships", font=self.heading_font
+            side, text="3. Directed relationships", font=self.heading_font
         ).pack(anchor="w", pady=(18, 6))
         ttk.Label(
             side,
-            text="Select the upper object, then choose\nthe lower object here and add the edge.",
+            text="Select the obstructing / upper object (arrow tail).\n"
+                 "Then choose the affected target (arrowhead).",
         ).pack(anchor="w")
+        self.relation_type = ttk.Combobox(
+            side, state="readonly", values=[f"{kind}: {name}" for kind, name in RELATION_NAMES.items()]
+        )
+        self.relation_type.current(0)
+        self.relation_type.pack(fill="x", pady=6)
+        ttk.Label(
+            side, text="1: above / occludes target (purple solid arrow).\n"
+                       "2: restricts grasping target (orange dashed arrow).\n"
+                       "Example: #2 -> #3 means #2 obstructs grasping #3.\n"
+                       "Removing #2 first may clear access to #3.\n"
+                       "This is a dependency, not a guaranteed pick order.\n"
+                       "Nearby alone is not obstruction. Class 1 takes priority.",
+            wraplength=480,
+        ).pack(anchor="w")
+        ttk.Label(side, text="Target: affected object (arrowhead)").pack(anchor="w", pady=(6, 0))
         self.below = ttk.Combobox(side, state="readonly", width=28)
         self.below.pack(fill="x", pady=6)
         ttk.Button(
-            side, text="Add: selected object -> lower object", command=self.add_edge
+            side, text="Add: selected object -> target object", command=self.add_edge
         ).pack(fill="x")
         self.edges = tk.Listbox(side, height=4, exportselection=False)
         self.edges.pack(fill="x", pady=5)
@@ -271,6 +291,9 @@ class Labeler:
             side,
             text="Edits save automatically. Escape cancels\nan unfinished box or grasp.",
         ).pack(anchor="w", pady=10)
+        # Scope wheel handling to sidebar widgets, including labels and buttons.
+        # A binding on the canvas alone does not receive its children's events.
+        self.setup_sidebar_scroll(sidebar)
 
         drawing = ttk.Frame(body)
         drawing.pack(side="left", fill="both", expand=True)
@@ -332,6 +355,45 @@ class Labeler:
     def switch_tool(self, mode):
         self.mode.set(mode)
         self.cancel()
+
+    def setup_sidebar_scroll(self, sidebar):
+        # Tk interprets a bindtag starting with '.' as a widget path. Prefix the
+        # canvas path so this is a unique class tag, not a nonexistent window.
+        self._sidebar_wheel_tag = f"D2TriPOSidebarWheel:{self.side_canvas}"
+        for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            self.side_canvas.bind_class(self._sidebar_wheel_tag, sequence, self.scroll_sidebar)
+        self.bind_sidebar_scroll(sidebar)
+        LOGGER.info("SIDEBAR_SCROLL enabled revision=2026-11-18-r2")
+
+    def bind_sidebar_scroll(self, widget):
+        tags = widget.bindtags()
+        if self._sidebar_wheel_tag not in tags:
+            widget.bindtags((tags[0], self._sidebar_wheel_tag, *tags[1:]))
+        for child in widget.winfo_children():
+            self.bind_sidebar_scroll(child)
+
+    def scroll_sidebar(self, event):
+        """Scroll the sidebar without refreshing annotations or uploading images."""
+        # Combobox popdowns are Tcl-created widgets; leave grabs/modal UI alone.
+        if self.root.tk.call("grab", "current", self.root._w):
+            return
+        number = getattr(event, "num", None)
+        delta = getattr(event, "delta", 0)
+        if number in (4, 5):
+            units = -3 if number == 4 else 3
+        elif delta:
+            units = (-1 if delta > 0 else 1) * max(1, int(abs(delta) / 120)) * 3
+        else:
+            return
+        # Lists keep native scrolling until their boundary, then scroll the panel.
+        if event.widget.winfo_class() == "Listbox":
+            first, last = event.widget.yview()
+            if (units < 0 and first > 0) or (units > 0 and last < 1):
+                return
+        first, last = self.side_canvas.yview()
+        if (units < 0 and first > 0) or (units > 0 and last < 1):
+            self.side_canvas.yview_scroll(units, "units")
+        return "break"
 
     @property
     def sample(self):
@@ -527,8 +589,8 @@ class Labeler:
         ]
         self.below.set("")
         self.edges.delete(0, "end")
-        for a, b in self.sample["edges"]:
-            self.edges.insert("end", f"#{a} → #{b}")
+        for edge in self.sample["edges"]:
+            self.edges.insert("end", edge_description(edge))
         count = sum(self.project.sample(n)["complete"] for n in self.project.files)
         progress = self.project.test_progress()
         difference = progress["target"] - progress["selected"]
@@ -557,6 +619,16 @@ class Labeler:
             f'Split: {ratios["train"]:.0%} train / {ratios["val"]:.0%} validation / '
             f'{ratios["test"]:.0%} test | {progress["planned"]} marked for test in the whole project.'
         )
+        if self.project.fixed_splits is not None:
+            split = self.project.fixed_splits[self.project.files[self.index]]
+            split_counts = {s: sum(v == s for v in self.project.fixed_splits.values())
+                            for s in ("train", "val", "test")}
+            test_text = (
+                f'Original split: {split.upper()} | Splits fixed on export: '
+                f'{split_counts["train"]} train / {split_counts["val"]} validation / '
+                f'{split_counts["test"]} test | {count}/{len(self.project.files)} reviewed and complete.'
+            )
+            color = "#333333"
         if self.test_status.get() != test_text:
             self.test_status.set(test_text)
         if self._test_color != color:
@@ -634,12 +706,14 @@ class Labeler:
             )
             for o in self.sample["objects"]
         }
-        for a, b in self.sample["edges"]:
+        for edge in self.sample["edges"]:
+            a, b, kind = edge_parts(edge)
             c.create_line(
                 *centers[a],
                 *centers[b],
                 arrow="last",
-                fill="#e0aaff",
+                fill="#e0aaff" if kind == 1 else "#ffad42",
+                dash=() if kind == 1 else (7, 4),
                 width=2,
                 tags="annotation",
             )
@@ -962,7 +1036,7 @@ class Labeler:
                 g for g in self.sample["grasps"] if g["object_id"] != obj["id"]
             ]
             self.sample["edges"] = [
-                e for e in self.sample["edges"] if obj["id"] not in e
+                e for e in self.sample["edges"] if obj["id"] not in e[:2]
             ]
             self.sample["relations_reviewed"] = False
 
@@ -977,16 +1051,37 @@ class Labeler:
     def add_edge(self):
         self.require_object()
         if self.below.current() < 0:
-            raise ValueError("Choose the lower object.")
+            raise ValueError("Choose the affected target object.")
         below = self.sample["objects"][self.below.current()]["id"]
-        edge = [self.selected, below]
-        if edge not in self.sample["edges"]:
-            self.change(lambda: self.sample["edges"].append(edge))
+        kind = self.relation_type.current() + 1
+        if kind not in RELATION_NAMES:
+            raise ValueError("Choose a relationship type.")
+        existing = next((i for i, edge in enumerate(self.sample["edges"])
+                         if edge_parts(edge)[:2] == (self.selected, below)), None)
+        if existing is not None:
+            previous_kind = edge_parts(self.sample["edges"][existing])[2]
+            if previous_kind == kind:
+                return
+            if previous_kind == 1:
+                raise ValueError("Overlap/stacking takes priority. Delete that relationship first if it is incorrect.")
+
+        def add():
+            edge = [self.selected, below, kind]
+            if existing is None:
+                self.sample["edges"].append(edge)
+            else:
+                self.sample["edges"][existing] = edge
+            self.sample["relations_reviewed"] = False
+
+        self.change(add)
 
     def delete_edge(self):
         selection = self.edges.curselection()
         if selection:
-            self.change(lambda: self.sample["edges"].pop(selection[0]))
+            def remove():
+                self.sample["edges"].pop(selection[0])
+                self.sample["relations_reviewed"] = False
+            self.change(remove)
 
     def review(self):
         self.change(lambda: self.sample.update(relations_reviewed=self.reviewed.get()))

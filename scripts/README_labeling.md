@@ -77,8 +77,9 @@ python scripts/label_dataset.py --no-grasps
 Or uncheck **Require grasps for completion** at the top of the sidebar. This setting
 applies to the whole project and persists when reopening. You can mark images
 complete using object boxes and reviewed relationships alone. If no objects
-overlap, leave relationships empty and check **Relationships reviewed**; export
-creates an all-zero adjacency matrix. Existing grasp annotations remain saved.
+overlap or obstruct one another's grasps, leave relationships empty and check
+**Relationships reviewed**; export creates an all-zero adjacency matrix.
+Existing grasp annotations remain saved.
 
 Export normally. The export's `manifest.json` records that grasp supervision is
 disabled, so `main.py --dataset_root data/topdown_labeled` automatically trains
@@ -149,10 +150,35 @@ scenes with no relationships. Its text changes to **Relationships confirmed**.
    contact axis). The preview shows the result; red edges show the two jaw
    faces. Choose Easy or Hard before drawing. Add multiple valid grasps per
    object when appropriate. Delete and redraw an incorrect grasp.
-3. For stacked objects, select the upper object, choose the lower object from
-   the dropdown, and add the relationship. The arrow points **above → below**,
-   meaning grasp the upper object first. Cycles are rejected. Review all pairs
-   and check **Relationships reviewed**, including scenes without overlaps.
+3. Under **Directed relationships**, select the object causing the dependency,
+   choose the relationship type, then choose the affected target object and
+   click **Add: selected object -> target object**.
+
+   - **1: Overlap / stacking** means the selected object is above or occludes
+     the target. These arrows are solid purple; stacking cycles are rejected.
+   - **2: Proximity / grasp obstruction** means the selected object restricts
+     grasping/manipulating the target through limited clearance or potential
+     collision. These arrows are dashed orange. Mere nearness is insufficient.
+
+   Both types point **source → target** and are directional. Add the reverse
+   separately only if it also applies. For proximity, **#2 → #3 means #2
+   obstructs grasping #3**: select #2 and choose #3 as the target. Removing #2
+   first may clear access to #3. It does not mean #3 obstructs #2, nor does it
+   certify that #2 is currently graspable or guarantee a valid picking sequence.
+   In the exported matrix, the row for object #2 and column for object #3
+   contains `2`; matrix positions follow label-row order, not object ID numbers.
+   Mutual obstruction and cycles involving
+   class 2 are permitted; these labels do not guarantee an executable plan.
+   Use consistent gripper size, approach direction, and preferred-grasp assumptions.
+   Class 1 takes priority when both types apply: adding stacking replaces an
+   existing proximity edge for that ordered pair. To correct a stacking edge to
+   proximity, delete it first, then add proximity. Deleting and re-adding an edge
+   also changes its target or direction. Edits support Undo and clear completion;
+   relationship edits also clear review confirmation.
+   Review both types and check **Relationships reviewed**, including scenes with
+   no dependencies. Existing projects' two-ID edges remain class 1; they are not
+   automatically marked unreviewed, so explicitly revisit previously completed
+   images when adding proximity labels.
 4. Click **Mark complete**, then **Next unfinished**. Completion requires at
    least one object and reviewed relationships, plus one grasp per object when
    **Require grasps** is checked. Partial
@@ -233,8 +259,16 @@ Annotation files use original pixel coordinates and these exact formats:
   Corners 2/3 face contact B, so the loader's angle follows the contact axis.
   Class IDs are looked up from the owner at export, so reclassifying an object
   also reclassifies its grasps.
-- Adjacency: an N×N binary matrix aligned with object label rows;
-  `A[upper,lower]=1`. No transitive edges are automatically inserted.
+- Adjacency: an N×N integer matrix aligned with object label rows;
+  `A[source,target]=0` means no dependency, `1` means overlap/stacking,
+  and `2` means proximity/grasp obstruction. The diagonal is zero. No reverse
+  or transitive edges are automatically inserted. Export to a new directory
+  to retain the original binary dataset as a baseline.
+
+The project JSON accepts legacy edges `[source_id, target_id]` as class 1.
+New edges use `[source_id, target_id, relationship_class]`. Existing boxes,
+grasps, class IDs, and split selections are preserved when reopening a project.
+The export manifest records the adjacency classes and direction convention.
 
 The split is by image. If several images depict the same scene, arrange scene
 separation before measuring generalization; this tool does not infer scene IDs.

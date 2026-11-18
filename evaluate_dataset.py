@@ -11,6 +11,12 @@ BBOX_FIELDS = (
     "bbox_extra_detections", "bbox_extra_relation_fp", "bbox_image_correct",
 )
 SCORE_FIELDS = ("recall", "precision", "f1", "image_accuracy")
+RELATION_CLASSES = {1: "overlap/stacking", 2: "grasp obstruction"}
+RELATION_FIELDS = tuple(
+    f"{prefix}relation_{relation_class}_{metric}"
+    for prefix in ("", "bbox_") for relation_class in RELATION_CLASSES
+    for metric in ("tp", "fp", "fn")
+)
 
 
 def calculate_scores(tp, fp, fn, correct_images, image_count):
@@ -47,8 +53,10 @@ def save_visualizations(image_path, prediction, output_dir):
     lines = [f"Predicted relationships ({len(relationships)})"]
     for rel in relationships:
         above_id, below_id = rel["above_id"], rel["below_id"]
+        relation_class = rel.get("relation_class", 1)
+        action = "above/occludes" if relation_class == 1 else "obstructs grasp of"
         lines.append(
-            f'#{above_id} {detections[above_id]["class_name"]} above '
+            f'[{relation_class}] #{above_id} {detections[above_id]["class_name"]} {action} '
             f'#{below_id} {detections[below_id]["class_name"]}'
             f'  ({rel["confidence"]:.2f})'
         )
@@ -222,6 +230,15 @@ def evaluate_split(
                     "extra_relation_fp": int(result["extra_relation_fp"]),
                     "image_correct": int(result["image_correct"]),
                     **{key: int(result[key]) for key in BBOX_FIELDS},
+                    **{
+                        f"{prefix}relation_{relation_class}_{metric}": int(result.get(
+                            f"{prefix}relation_{relation_class}_{metric}",
+                            result[f"{prefix}{metric}"] if relation_class == 1 else 0,
+                        ))
+                        for prefix in ("", "bbox_")
+                        for relation_class in RELATION_CLASSES
+                        for metric in ("tp", "fp", "fn")
+                    },
                 }
             )
             row = rows[-1]
@@ -273,6 +290,7 @@ def evaluate_split(
                 "extra_relation_fp",
                 "image_correct",
                 *BBOX_FIELDS,
+                *RELATION_FIELDS,
                 *SCORE_FIELDS,
                 *(f"bbox_{key}" for key in SCORE_FIELDS),
             ),
@@ -303,6 +321,7 @@ def evaluate_split(
     if visualization_errors:
         print(f"Visualizations failed: {len(visualization_errors)} (metrics retained)")
     print("\nClass-aware relationship metrics (IoU >= 0.5; matching object classes):")
+    print("Edges require the correct direction and relationship class (1=overlap/stacking, 2=grasp obstruction).")
     print(f"Total objects: {total_objects}")
     print(f"Total missing objects: {total_missing}")
     print(f"Total extra detections: {total_extra}")
@@ -323,18 +342,32 @@ def evaluate_split(
         score = bbox_scores[key]
         print(f"Box-only {label}: {score * 100.0 if score is not None else 'N/A'}")
 
+    summary_rows = [
+        dict(evaluation="class_aware", images_evaluated=len(rows),
+             tp=total_tp, fp=total_fp, fn=total_fn, **class_scores),
+        dict(evaluation="box_only", images_evaluated=len(rows),
+             tp=tp, fp=fp, fn=fn, **bbox_scores),
+    ]
+    for prefix, evaluation in (("", "class_aware"), ("bbox_", "box_only")):
+        for relation_class, name in RELATION_CLASSES.items():
+            counts = {metric: sum(row[f"{prefix}relation_{relation_class}_{metric}"]
+                                  for row in rows) for metric in ("tp", "fp", "fn")}
+            scores = calculate_scores(**counts, correct_images=0, image_count=0)
+            print(f"{evaluation} class {relation_class} ({name}): "
+                  f"TP={counts['tp']}, FP={counts['fp']}, FN={counts['fn']}, "
+                  f"F1={scores['f1'] if scores['f1'] is not None else 'N/A'}")
+            summary_rows.append(dict(
+                evaluation=f"{evaluation}_relation_{relation_class}",
+                images_evaluated=len(rows), **counts, **scores,
+            ))
+
     summary_path = image_output_dir / "summary.csv"
     with summary_path.open("w", newline="") as f:
         writer = csv.DictWriter(
             f, fieldnames=("evaluation", "images_evaluated", "tp", "fp", "fn", *SCORE_FIELDS)
         )
         writer.writeheader()
-        writer.writerows([
-            dict(evaluation="class_aware", images_evaluated=len(rows),
-                 tp=total_tp, fp=total_fp, fn=total_fn, **class_scores),
-            dict(evaluation="box_only", images_evaluated=len(rows),
-                 tp=tp, fp=fp, fn=fn, **bbox_scores),
-        ])
+        writer.writerows(summary_rows)
     print(f"\nResults saved: {csv_path}")
     print(f"Dataset summary: {summary_path}")
     print(f"Error log: {error_path}")

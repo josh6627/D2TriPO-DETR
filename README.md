@@ -273,6 +273,10 @@ code_root/
 
 ### Training
 
+For GPU batch training on WPI's Turing cluster, see the
+[Turing setup and submission guide](scripts/README_turing.md) and
+[`scripts/train_turing.sbatch`](scripts/train_turing.sbatch).
+
 To train the baseline D2TriPO-DETR on a single node with 4 GPUs for 110 epochs, first modify the dataset path in `./datasets/vmrd.py`, then download the [resnet101_doubledetr](https://drive.google.com/file/d/1AHhbgWUhpmpR2t3Q4XSuO6FvX-na-u5E/view?usp=drive_link) weight file and place it in the project root directory, and finally run the following command:
 
 ```bash

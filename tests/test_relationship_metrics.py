@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 from PIL import Image
 import torch
@@ -19,7 +20,7 @@ BOX_C = [40., 10., 50., 20.]
 
 
 class RelationshipMetricTests(unittest.TestCase):
-    def evaluate(self, gt_objects, gt_adj, detections, edges, symlink=False):
+    def evaluate(self, gt_objects, gt_adj, detections, edges, symlink=False, multiclass=False):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / 'dataset'
             for kind in ('images', 'labels', 'adj'):
@@ -45,9 +46,16 @@ class RelationshipMetricTests(unittest.TestCase):
                 x1, y1, x2, y2 = box
                 boxes[0, query] = torch.tensor([(x1+x2)/200, (y1+y2)/200,
                                                 (x2-x1)/100, (y2-y1)/100])
-            adj = torch.full((1, n, n), -20.)
-            for above, below in edges:
-                adj[0, above, below] = 10.
+            if multiclass:
+                adj = torch.full((1, n, n, 3), -20.)
+                adj[..., 0] = 10.
+                for above, below, relation_class in edges:
+                    adj[0, above, below] = -20.
+                    adj[0, above, below, relation_class] = 10.
+            else:
+                adj = torch.full((1, n, n), -20.)
+                for above, below in edges:
+                    adj[0, above, below] = 10.
             model = Mock(return_value={'pred_logits': logits, 'pred_boxes': boxes, 'pred_adj': adj})
             model.class_names = ['a', 'b', 'c']
             with patch.object(inspect_objects, 'device', torch.device('cpu')), \
@@ -57,9 +65,10 @@ class RelationshipMetricTests(unittest.TestCase):
                 result = inspect_objects.evaluate_one_image(image_path, model, return_predictions=True)
             # Displayed and scored arrows must describe exactly the same predictions.
             self.assertEqual(len(result['prediction']['relationships']), result['tp'] + result['fp'])
-            self.assertEqual(result['tp'] + result['fn'], sum(map(sum, gt_adj)))
+            edge_count = sum(value != 0 for row in gt_adj for value in row)
+            self.assertEqual(result['tp'] + result['fn'], edge_count)
             self.assertEqual(result['total_objects'], len(gt_objects))
-            self.assertEqual(result['bbox_tp'] + result['bbox_fn'], sum(map(sum, gt_adj)))
+            self.assertEqual(result['bbox_tp'] + result['bbox_fn'], edge_count)
             self.assertEqual(result['bbox_tp'] + result['bbox_fp'],
                              len(result['prediction']['relationships']))
             return result
@@ -132,8 +141,89 @@ class RelationshipMetricTests(unittest.TestCase):
     def test_malformed_adjacency_rejected(self):
         with self.assertRaisesRegex(ValueError, 'adjacency shape'):
             self.evaluate([(0, BOX_A), (1, BOX_B)], [[0]], [(0, BOX_A)], [])
-        with self.assertRaisesRegex(ValueError, 'binary'):
-            self.evaluate([(0, BOX_A), (1, BOX_B)], [[0, 2], [0, 0]], [(0, BOX_A)], [])
+        with self.assertRaisesRegex(ValueError, 'only 0, 1, 2'):
+            self.evaluate([(0, BOX_A), (1, BOX_B)], [[0, 3], [0, 0]], [(0, BOX_A)], [])
+        with self.assertRaisesRegex(ValueError, 'zero diagonal'):
+            self.evaluate([(0, BOX_A)], [[2]], [(0, BOX_A)], [])
+
+    def test_directed_obstruction_with_permuted_queries(self):
+        result = self.evaluate([(0, BOX_A), (1, BOX_B)], [[0, 2], [0, 0]],
+                               [(1, BOX_B), (0, BOX_A)], [(1, 0, 2)], multiclass=True)
+        self.assertEqual((result['tp'], result['fp'], result['fn'], result['image_correct']), (1, 0, 0, 1))
+        self.assertEqual(result['relation_2_tp'], 1)
+        self.assertEqual(result['relation_1_tp'], 0)
+        prediction = result['prediction']
+        self.assertEqual(prediction['adjacency_classes'], [[0, 0], [2, 0]])
+        rel = prediction['relationships'][0]
+        self.assertEqual((rel['source_id'], rel['target_id'], rel['relation_class']), (1, 0, 2))
+        self.assertEqual(rel['relation_name'], 'grasp obstruction')
+
+    def test_wrong_relation_type_counts_fp_and_fn_in_both_match_modes(self):
+        result = self.evaluate([(0, BOX_A), (1, BOX_B)], [[0, 2], [0, 0]],
+                               [(0, BOX_A), (1, BOX_B)], [(0, 1, 1)], multiclass=True)
+        for prefix in ('', 'bbox_'):
+            self.assertEqual(tuple(result[prefix+k] for k in ('tp', 'fp', 'fn', 'image_correct')), (0, 1, 1, 0))
+            self.assertEqual(result[prefix+'relation_1_fp'], 1)
+            self.assertEqual(result[prefix+'relation_2_fn'], 1)
+
+    def test_both_relation_types_and_self_edges(self):
+        result = self.evaluate([(0, BOX_A), (1, BOX_B)], [[0, 1], [2, 0]],
+                               [(0, BOX_A), (1, BOX_B)],
+                               [(0, 1, 1), (1, 0, 2), (0, 0, 2)], multiclass=True)
+        self.assertEqual((result['tp'], result['fp'], result['fn'], result['image_correct']), (2, 0, 0, 1))
+        self.assertEqual(result['relation_1_tp'], 1)
+        self.assertEqual(result['relation_2_tp'], 1)
+
+    def test_extra_obstruction_edge_counts_once(self):
+        result = self.evaluate([(0, BOX_A)], [[0]],
+                               [(0, BOX_A), (2, BOX_B), (2, BOX_C)], [(1, 2, 2)], multiclass=True)
+        for prefix in ('', 'bbox_'):
+            self.assertEqual(result[prefix+'extra_relation_fp'], 1)
+            self.assertEqual(result[prefix+'relation_2_fp'], 1)
+
+    def test_missing_objects_with_three_class_output(self):
+        result = self.evaluate([(0, BOX_A), (1, BOX_B)], [[0, 2], [0, 0]],
+                               [], [], multiclass=True)
+        self.assertEqual((result['tp'], result['fp'], result['fn']), (0, 0, 1))
+        self.assertEqual(result['relation_2_fn'], 1)
+        self.assertEqual(result['prediction']['relationships'], [])
+
+    def test_empty_scene_with_three_class_output(self):
+        result = self.evaluate([], [], [], [], multiclass=True)
+        self.assertEqual((result['tp'], result['fp'], result['fn'], result['image_correct']), (0, 0, 0, 1))
+
+    def test_argmax_does_not_require_winning_probability_over_half(self):
+        # Class 2 wins with softmax probability below 0.5; self edges stay zero.
+        logits = torch.tensor([[[0., 0.1, 0.2], [0., 0.1, 0.2]],
+                               [[0.2, 0.1, 0.], [0., 0.1, 0.2]]])
+        classes, confidence = inspect_objects.decode_adjacency(logits)
+        self.assertEqual(classes.tolist(), [[0, 2], [0, 0]])
+        self.assertLess(confidence[0, 1], 0.5)
+        binary, _ = inspect_objects.decode_adjacency(torch.tensor([[[9.], [9.]], [[-9.], [9.]]]))
+        self.assertEqual(binary.tolist(), [[0, 1], [0, 0]])
+
+    def test_loader_keeps_binary_and_three_class_checkpoint_weights(self):
+        def model_with_head(output_size):
+            model = torch.nn.Module()
+            head = torch.nn.Module()
+            head.layers = torch.nn.ModuleList([torch.nn.Linear(4, output_size)])
+            model.adj_embed = torch.nn.ModuleList([head])
+            return model
+
+        for output_size in (1, 3):
+            with self.subTest(output_size=output_size), tempfile.TemporaryDirectory() as temp:
+                original = model_with_head(output_size)
+                checkpoint = Path(temp) / 'checkpoint.pth'
+                torch.save(dict(model=original.state_dict(),
+                                args=SimpleNamespace(class_names=['a', 'b'])), checkpoint)
+                with patch.object(inspect_objects, 'device', torch.device('cpu')), \
+                        patch.object(inspect_objects, 'build_dab_deformable_detr',
+                                     return_value=(model_with_head(3), None, None)):
+                    loaded = inspect_objects.load_model(checkpoint)
+                self.assertFalse(loaded.training)
+                self.assertEqual(loaded.class_names, ['a', 'b'])
+                for key, value in original.state_dict().items():
+                    torch.testing.assert_close(loaded.state_dict()[key], value)
 
 
 if __name__ == '__main__':

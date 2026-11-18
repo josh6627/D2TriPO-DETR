@@ -17,6 +17,59 @@ BBOX_RESULT = dict(total_objects=2, bbox_tp=1, bbox_fp=0, bbox_fn=0, bbox_missin
 
 
 class EvaluateDatasetTests(unittest.TestCase):
+    def test_typed_relation_counts_are_saved_and_aggregated(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            result = dict(tp=1, fp=1, fn=1, missing_objects=0,
+                          extra_detections=0, extra_relation_fp=0, image_correct=0,
+                          **BBOX_RESULT)
+            for prefix in ('', 'bbox_'):
+                result.update({f'{prefix}relation_1_tp': 1, f'{prefix}relation_1_fp': 1,
+                               f'{prefix}relation_1_fn': 0, f'{prefix}relation_2_tp': 0,
+                               f'{prefix}relation_2_fp': 0, f'{prefix}relation_2_fn': 1})
+            with redirect_stdout(io.StringIO()):
+                evaluate_dataset.evaluate_split(
+                    [root/'one.png', root/'two.png'], object(), Mock(return_value=result),
+                    root, 'test', save_images=False)
+            folder = root/'visualizations/test'
+            with (folder/'results.csv').open() as file:
+                rows = list(csv.DictReader(file))
+            self.assertEqual(rows[0]['relation_2_fn'], '1')
+            self.assertEqual(rows[0]['bbox_relation_1_fp'], '1')
+            with (folder/'summary.csv').open() as file:
+                summary = {row['evaluation']: row for row in csv.DictReader(file)}
+            for prefix in ('class_aware', 'box_only'):
+                stacking = summary[f'{prefix}_relation_1']
+                obstruction = summary[f'{prefix}_relation_2']
+                self.assertEqual((stacking['tp'], stacking['fp'], stacking['fn']), ('2', '2', '0'))
+                self.assertAlmostEqual(float(stacking['f1']), 2/3)
+                self.assertEqual((obstruction['tp'], obstruction['fn']), ('0', '2'))
+                self.assertEqual(obstruction['image_accuracy'], '')
+
+    def test_visualization_names_obstruction_and_preserves_direction(self):
+        from PIL import Image, ImageDraw
+        from infer_unlabeled_dataset import visualize
+
+        objects = [dict(id=0, class_name='tool', confidence=0.9, bbox_xyxy=[10,10,30,30]),
+                   dict(id=1, class_name='cup', confidence=0.9, bbox_xyxy=[70,70,90,90])]
+        rel = dict(above_id=0, below_id=1, relation_class=2, confidence=0.7)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            image = root/'one.png'
+            Image.new('RGB', (100,100), 'white').save(image)
+            original_text = ImageDraw.ImageDraw.text
+            text_lines = []
+            def capture(draw, xy, text, *args, **kwargs):
+                text_lines.append(text)
+                return original_text(draw, xy, text, *args, **kwargs)
+            with patch.object(ImageDraw.ImageDraw, 'text', capture), \
+                    patch('infer_unlabeled_dataset.visualize', wraps=visualize) as render:
+                evaluate_dataset.save_visualizations(
+                    image, dict(detections=objects, relationships=[rel]), root/'output')
+            self.assertTrue(any('[2] #0 tool obstructs grasp of #1 cup' in line for line in text_lines))
+            self.assertEqual(render.call_args.args[2], [rel])
+            self.assertTrue((root/'output/one.png_relationships.jpg').exists())
+
     def test_box_only_metrics_are_saved_and_aggregated_separately(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

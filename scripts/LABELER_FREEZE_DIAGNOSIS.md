@@ -1,5 +1,104 @@
 # Labeler desktop freeze investigation — November 6–7, 2026
 
+## Recurrence after Next image, November 18 at 12:16 PM EST
+
+The user reported a crash immediately after clicking Next image. In boot
+`21e5fc78b530499d88d5490e359473a4`, kernel `7.0.0-42-generic` logged
+`GT0: GUC: Engine reset failed on 0:0 (rcs0)` at **12:16:30.365997 PM EST**,
+followed by forcewake timeouts. No OOM-kill entries were found in that boot.
+The next boot began at 12:19:56 PM. The current boot runs `7.0.0-43-generic`;
+both `7.0.0-38-generic` and the failing `-42` remain installed.
+
+The final labeler entries are LOAD/RENDER of `000361.png` at 12:16:20.981 /
+12:16:21.006, displayed at 1420×1158. There is no subsequent callback error or
+normal CLOSE entry. An earlier review-validation exception at 12:12:23 was
+followed by continued labeling and is not evidence of the eventual failure.
+The saved annotations for the preceding image `000360.png` contain no edges;
+`000361.png` has two class-1 edges and no class-2 edges. This does not establish
+a scroll or dashed-proximity-arrow trigger. Current labeler source exactly
+matches the preserved direction-clarification snapshot.
+
+Preserved the project, available rotated labeler logs, exact application source,
+previous-boot kernel journal and annotation audit under
+`results/labeler_freeze_20261118_121630/`. All 486 annotations validate, including
+350 completed images and the unchanged 43-class registry. The source project
+was read, not rewritten.
+
+The evidence confirms recurrence of the Intel graphics failure, but does not
+identify the application operation or kernel defect that triggers it. No new
+application patch, driver change or reboot was performed. The next controlled
+comparison is the same labeler on the currently booted `-43`, keeping app code
+unchanged. If it recurs, a one-time boot of installed `-38` is another comparison;
+neither has been established as a fix. Avoid attributing stability to an app
+change while simultaneously changing the kernel.
+
+## Proximity direction clarification, November 18, 2026
+
+Clarified sidebar instructions and relationship-list text: `#2 → #3` means
+`#2 obstructs grasping #3`; the selected source is the arrow tail and the
+affected target is the arrowhead. Removing the source may clear access to the
+target, without certifying a full pick sequence. Export metadata and labeling
+guides now state the same rule. Stored edge orientation and arrow rendering
+remain unchanged. A code snapshot and isolated UI patch are saved as
+`direction_clarification_label_dataset.py` and `direction_clarification.patch`
+in `results/labeler_sidebar_scroll_2026-11-18/` for future crash comparisons.
+Twenty-nine targeted tests passed, including a selected-object #2 / target #3
+edit through export verifying class 2 only in the source-row/target-column
+entry. No window-based stability test or new crash diagnosis was performed.
+
+## Sidebar startup error and correction, November 18, 2026
+
+After the scrolling change, the user reported startup failing in `bind_class`
+with `TclError: bad window path name` for the canvas path suffixed with
+`.SidebarWheel`. The new tag began with `.`, which Tk interprets as a widget
+path rather than an arbitrary class tag. This identifies a Python/Tk startup
+regression introduced by the scrolling patch; it supplies no evidence of a
+recurrence of the earlier kernel/GPU freezes.
+
+Corrected registration prefixes the canvas path with `D2TriPOSidebarWheel:`.
+The startup marker is now `SIDEBAR_SCROLL enabled revision=2026-11-18-r2`.
+Added a regression test that exercises registration using the reported canvas
+path and checks all three wheel bindings use a non-window class tag. Eleven
+tests passed; eight window tests still skipped without a display, so actual
+window startup has not been verified here. The initial failed source remains
+in the original scrolling snapshots; `corrected_label_dataset.py` and
+`startup_tag_fix.patch` in that same artifact folder preserve this correction.
+
+## Sidebar scrolling change, November 18, 2026
+
+The user reported that wheel scrolling did not work over sidebar labels and
+asked to preserve a record in case crashes return. No new crash was reported
+in this request. Inspection found no sidebar wheel bindings.
+
+The local, uncommitted change in `scripts/label_dataset.py` adds one scoped
+bindtag to existing sidebar widgets for `<MouseWheel>` and Linux buttons 4/5.
+The callback moves only the sidebar viewport. It does not call annotation
+redraw, image upload, save, or schedule callbacks. Listboxes retain native
+scrolling while they can move, handing off to the panel at a boundary; closed
+comboboxes scroll the panel without changing their value. Modal grabs and
+combobox popdowns are left to Tk using raw Tcl grab inspection, avoiding Python
+lookup of Tcl-created widget paths. No global wheel binding is installed.
+
+An exact local working-tree baseline, updated source, isolated patch, regression
+test source and SHA-256 metadata are saved in
+`results/labeler_sidebar_scroll_2026-11-18/`. The baseline already includes the
+earlier November 18 proximity/typed-edge UI (including dashed orange arrows)
+and imported fixed-split support. The patch isolates scrolling from those
+earlier changes. These artifacts are ignored local files, not a Git commit.
+Startup now logs `SIDEBAR_SCROLL enabled revision=2026-11-18` once. Keep the
+project-adjacent `labeler.log` and rotated backups if a crash recurs; for the
+combined project these are under
+`data/combined_datasets/combined_real_cluttered_lab/`.
+
+Validation: seven new display-free tests cover wheel direction, widget routing,
+boundaries, modal grabs, tag scope/idempotence and 500 wheel events without
+redraw/save/scheduled callbacks. Together with startup/font and render-budget
+checks, 10 tests passed; eight window-based tests skipped because a display was
+unavailable. This does not establish physical GPU/driver stability. If crashes
+return, correlate the startup marker and last logged operation with the kernel
+evidence described below, comparing the saved scrolling patch and earlier
+proximity rendering changes rather than assuming a cause.
+
 ## Resize recurrence and targeted rendering patch, November 7 at 6:04 PM EST
 
 The user reported another full-system freeze while resizing. Boot

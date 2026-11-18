@@ -10,7 +10,30 @@ from util.dataset_config import class_id_mapping
 from models import build_dab_deformable_detr
 
 
-def evaluate_relationships(ground_truth, predicted):
+RELATION_NAMES = {1: "overlap/stacking", 2: "grasp obstruction"}
+
+
+def decode_adjacency(logits):
+    """Decode one image's directed pair logits; self-relations are ignored."""
+    if logits.ndim == 3 and logits.shape[-1] == 3:
+        probabilities = logits.softmax(dim=-1)
+        confidence, classes = probabilities.max(dim=-1)
+    else:
+        if logits.ndim == 3 and logits.shape[-1] == 1:
+            logits = logits.squeeze(-1)
+        if logits.ndim != 2:
+            raise ValueError(f"Expected adjacency logits [Q,Q], [Q,Q,1] or [Q,Q,3], got {tuple(logits.shape)}")
+        confidence = logits.sigmoid()
+        classes = (confidence > 0.5).long()
+    if classes.shape[0] != classes.shape[1]:
+        raise ValueError("Adjacency logits must have equal row and column counts")
+    classes = classes.clone()
+    classes.fill_diagonal_(0)
+    return classes, confidence
+
+
+def evaluate_relationships(ground_truth, predicted, relation_class=None):
+    """Count typed directed edges; a wrong type contributes both FP and FN."""
     tp = 0
     fp = 0
     fn = 0
@@ -23,12 +46,13 @@ def evaluate_relationships(ground_truth, predicted):
             gt = ground_truth[i][j]
             pred = predicted[i][j]
 
-            if gt == 1 and pred == 1:
+            gt_positive = gt != 0 if relation_class is None else gt == relation_class
+            pred_positive = pred != 0 if relation_class is None else pred == relation_class
+            if gt_positive and pred_positive and gt == pred:
                 tp += 1
-            elif gt == 1 and pred == 0:
-                fn += 1
-            elif gt == 0 and pred == 1:
-                fp += 1
+            else:
+                fn += int(gt_positive)
+                fp += int(pred_positive)
     return tp, fp, fn
 
 
@@ -119,7 +143,8 @@ def align_relationships(gt_adj, outputs, matches, detections):
     query_ids = [matches[i]["query_id"] for i in gt_indices] + extra_queries
     if query_ids:
         adjacency = outputs["pred_adj"][0]
-        subset = (adjacency[query_ids][:, query_ids].sigmoid() > 0.5).long().cpu()
+        subset, _ = decode_adjacency(adjacency[query_ids][:, query_ids])
+        subset = subset.cpu()
         idx = torch.tensor(positions, dtype=torch.long)
         predicted[idx[:, None], idx[None, :]] = subset
     predicted.fill_diagonal_(0)
@@ -135,6 +160,16 @@ def load_model(checkpoint_path="checkpoints/checkpoint0110.pth"):
     args.device = str(device)
 
     model, _, _ = build_dab_deformable_detr(args)
+    # This branch builds a three-class head. Match legacy binary checkpoints
+    # before strict loading so their learned adjacency weights remain usable.
+    for index, head in enumerate(model.adj_embed):
+        layer = head.layers[-1]
+        key = f"adj_embed.{index}.layers.{len(head.layers) - 1}.weight"
+        output_size = checkpoint["model"][key].shape[0]
+        if output_size not in (1, 3):
+            raise ValueError(f"Unsupported adjacency output size in checkpoint: {output_size}")
+        if layer.out_features != output_size:
+            head.layers[-1] = torch.nn.Linear(layer.in_features, output_size)
     model.load_state_dict(checkpoint["model"], strict=True)
     model.class_names = getattr(args, "class_names", None)
     return model.to(device).eval()
@@ -161,7 +196,8 @@ def evaluate_one_image(image_path, model, return_predictions=False):
     print("Network input shape:", tuple(input_tensor.shape))
 
     # Run inference
-    torch.cuda.reset_peak_memory_stats()
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats()
 
     with torch.inference_mode():
         outputs = model(input_tensor)
@@ -172,9 +208,8 @@ def evaluate_one_image(image_path, model, return_predictions=False):
         if torch.is_tensor(value):
             print(f"{name}: {tuple(value.shape)}")
 
-    print(
-        f"\nPeak GPU memory: " f"{torch.cuda.max_memory_allocated() / 1024**3:.2f} GB"
-    )
+    if device.type == "cuda":
+        print(f"\nPeak GPU memory: {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB")
 
     # Examine the object detection predictions
     class_names = [
@@ -299,7 +334,7 @@ def evaluate_one_image(image_path, model, return_predictions=False):
         else:
             print("No ground-truth annotation found:", label_path)
     else:
-        print("Image is outside the expected VMRD folder structure.")
+        raise ValueError("Image is outside the expected VMRD folder structure: images/<split>/<image>")
 
     # Display predictions and corresponding ground-truth boxes
     for score, index in zip(scores[keep], indices[keep]):
@@ -334,11 +369,13 @@ def evaluate_one_image(image_path, model, return_predictions=False):
             [[int(value) for value in line.split()] for line in f if line.strip()],
             dtype=torch.int64,
         )
+    if not gt_objects and gt_adj.numel() == 0:
+        gt_adj = gt_adj.reshape(0, 0)
     expected_shape = (len(gt_objects), len(gt_objects))
     if tuple(gt_adj.shape) != expected_shape:
         raise ValueError(f"{adj_path}: expected adjacency shape {expected_shape}, got {tuple(gt_adj.shape)}")
-    if not torch.all((gt_adj == 0) | (gt_adj == 1)) or torch.any(gt_adj.diagonal() != 0):
-        raise ValueError(f"{adj_path}: adjacency must be binary with a zero diagonal")
+    if not torch.all((gt_adj >= 0) & (gt_adj <= 2)) or torch.any(gt_adj.diagonal() != 0):
+        raise ValueError(f"{adj_path}: adjacency must contain only 0, 1, 2 with a zero diagonal")
 
     print("Ground-truth adjacency file:", adj_path)
 
@@ -379,7 +416,7 @@ def evaluate_one_image(image_path, model, return_predictions=False):
 
     pred_subset = outputs["pred_adj"][0]
     pred_subset = pred_subset[matched_query_ids][:, matched_query_ids]
-    pred_subset = (pred_subset.sigmoid() > 0.5).int()
+    pred_subset, _ = decode_adjacency(pred_subset)
 
     print("Matched ground-truth indices:", matched_gt_indices)
     print("Matched query IDs:", matched_query_ids)
@@ -393,7 +430,7 @@ def evaluate_one_image(image_path, model, return_predictions=False):
     # Number of annotated and extra predicted objects
     n_gt = len(gt_objects)
     n_extra = len(unmatched_detections)
-    gt_for_scoring, predicted_binary = align_relationships(
+    gt_for_scoring, predicted_classes = align_relationships(
         gt_adj, outputs, matches, detections
     )
 
@@ -403,17 +440,17 @@ def evaluate_one_image(image_path, model, return_predictions=False):
     print("Unmatched detections:", n_extra)
 
     print("\nFull predicted adjacency:")
-    for row in predicted_binary:
+    for row in predicted_classes:
         print(row.tolist())
 
     tp, fp, fn = evaluate_relationships(
-        gt_for_scoring.tolist(), predicted_binary.tolist()
+        gt_for_scoring.tolist(), predicted_classes.tolist()
     )
 
     # False-positive directed edges involving extra detections
     extra_relation_fp = int(
-        predicted_binary[n_gt:, :].sum().item()
-        + predicted_binary[:n_gt, n_gt:].sum().item()
+        (predicted_classes[n_gt:, :] != 0).sum().item()
+        + (predicted_classes[:n_gt, n_gt:] != 0).sum().item()
     )
 
     print(f"\nTP: {tp}, FP: {fp}, FN: {fn}")
@@ -428,7 +465,7 @@ def evaluate_one_image(image_path, model, return_predictions=False):
     image_correct = (
         missing_objects == 0
         and n_extra == 0
-        and torch.equal(predicted_binary, gt_for_scoring)
+        and torch.equal(predicted_classes, gt_for_scoring)
     )
 
     print("Image correct:", image_correct)
@@ -459,26 +496,62 @@ def evaluate_one_image(image_path, model, return_predictions=False):
         bbox_missing_objects=bbox_missing,
         bbox_extra_detections=bbox_extra,
         bbox_extra_relation_fp=int(
-            bbox_pred[n_gt:, :].sum().item() + bbox_pred[:n_gt, n_gt:].sum().item()
+            (bbox_pred[n_gt:, :] != 0).sum().item()
+            + (bbox_pred[:n_gt, n_gt:] != 0).sum().item()
         ),
         bbox_image_correct=int(
             bbox_missing == 0 and bbox_extra == 0 and torch.equal(bbox_gt, bbox_pred)
         ),
     )
+    for prefix, truth, prediction in (("", gt_for_scoring, predicted_classes),
+                                      ("bbox_", bbox_gt, bbox_pred)):
+        for relation_class in RELATION_NAMES:
+            counts = evaluate_relationships(truth.tolist(), prediction.tolist(), relation_class)
+            result.update({f"{prefix}relation_{relation_class}_{key}": value
+                           for key, value in zip(("tp", "fp", "fn"), counts)})
     print(f"Box-only TP: {bbox_tp}, FP: {bbox_fp}, FN: {bbox_fn}")
     if return_predictions:
-        from infer_unlabeled_dataset import decode_predictions
-
-        result["prediction"] = decode_predictions(
-            outputs,
-            W,
-            H,
-            score_threshold=0.4,
-            relation_threshold=0.5,
-            topk=100,
-            class_names=class_names,
+        result["prediction"] = relationship_predictions(
+            outputs, detections, W, H, class_names
         )
     return result
+
+
+def relationship_predictions(outputs, detections, width, height, class_names):
+    """Render the same query selection and typed edges that evaluation scores."""
+    from infer_unlabeled_dataset import cxcywh_to_xyxy_pixels
+
+    objects = []
+    for index, det in enumerate(detections):
+        class_id = det["class_id"]
+        objects.append(dict(
+            id=index, query_id=det["query_id"], class_id=class_id,
+            class_name=(class_names[class_id] if class_id < len(class_names)
+                        else f"unmapped_class_{class_id}"),
+            confidence=round(det["score"], 6),
+            bbox_xyxy=cxcywh_to_xyxy_pixels(
+                outputs["pred_boxes"][0, det["query_id"]], width, height),
+        ))
+    query_ids = [det["query_id"] for det in detections]
+    logits = outputs["pred_adj"][0][query_ids][:, query_ids]
+    classes, confidence = decode_adjacency(logits)
+    classes, confidence = classes.cpu(), confidence.cpu()
+    relationships = []
+    for i, j in classes.nonzero().tolist():
+        relation_class = int(classes[i, j])
+        relationships.append(dict(
+            source_id=i, target_id=j, relation_class=relation_class,
+            relation_name=RELATION_NAMES[relation_class],
+            # Existing arrow renderer uses these keys as source/target IDs.
+            above_id=i, below_id=j,
+            above_query_id=query_ids[i], below_query_id=query_ids[j],
+            above_class=objects[i]["class_name"], below_class=objects[j]["class_name"],
+            confidence=round(float(confidence[i, j]), 6),
+        ))
+    return dict(detections=objects, relationships=relationships,
+                adjacency_classes=classes.tolist(),
+                adjacency_binary=(classes != 0).long().tolist(),
+                adjacency_probabilities=confidence.tolist())
 
 
 if __name__ == "__main__":
