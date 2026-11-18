@@ -1,6 +1,6 @@
 python scripts/merge_datasets.py \
-  --inputs data/synth_lab_dataset data/real_lab_dataset data/vmrd_2.5pct \
-  --output data/combined_datasets/combined_dataset_no_topdown \
+  --inputs data/labmate_real_cluttered_lab data/real_cluttered_lab \
+  --output data/combined_datasets/combined_real_cluttered_lab \
   --cross-split-duplicates prefer-val
 
 
@@ -25,11 +25,11 @@ python evaluate_dataset.py --dataset-root data/real_lab_dataset \
 
 START TRAINING
 python main.py \
-  --dataset_root data/combined_datasets/combined_dataset_no_topdown \
+  --dataset_root data/combined_datasets/combined_real_cluttered_lab \
   --pretrain_model_path checkpoints/checkpoint0110.pth \
   --finetune_ignore class_embed \
   --no-pred-train \
-  --output_dir checkpoints/real-synth-vmrd_finetune \
+  --output_dir checkpoints/real-cluttered-lab_finetune-updated \
   --lr 1e-5 \
   --lr_backbone 1e-6 \
   --batch_size 1 \

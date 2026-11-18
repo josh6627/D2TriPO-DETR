@@ -261,7 +261,9 @@ def visualize(image, detections, relationships, with_arrows, font=None):
         color = COLORS[i % len(COLORS)]
         x1, y1, x2, y2 = det["bbox_xyxy"]
         draw.rectangle((x1, y1, x2, y2), outline=color, width=3)
-        label = f'{i}: {det["class_name"]} {det["confidence"]:.2f}'
+        label = f'{i}: {det["class_name"]}'
+        if "confidence" in det:
+            label += f' {det["confidence"]:.2f}'
         text_bbox = draw.textbbox((0, 0), label, font=font)
         text_w = text_bbox[2] - text_bbox[0]
         text_h = text_bbox[3] - text_bbox[1]

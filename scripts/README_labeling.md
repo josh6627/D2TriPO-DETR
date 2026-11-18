@@ -186,12 +186,15 @@ as more images become complete. The labeler never chooses test images randomly.
 Defaults are **70% training, 10% validation, 20% test**. For 100 completed images,
 choose 20 for test; the other 80 are randomly split into 70 train and 10 val.
 Use **Split ratios...** to edit the three percentages; settings persist in the
-project. Counts round to the nearest whole image (half up), with at least one
-image in each split. Very small exports can therefore differ from the requested
-percentages. The counter's target count is authoritative.
+project. Zero percentages are allowed: use **0, 0, 100** for a test-only dataset
+and mark every completed image **Use this image for TEST**. Counts round to the
+nearest whole image (half up), with at least one image in each nonzero split.
+Zero-ratio splits stay empty. Very small exports can therefore differ from the
+requested percentages. The counter's target count is authoritative.
 
 **Export completed** asks for a parent folder and a new dataset folder name.
-At least **three** completed images are required, and the number of completed
+At least one completed image per nonzero split is required (three with the default
+ratios, one for a test-only export), and the number of completed
 test selections must match the displayed target. Export validates every sample
 and writes `train`, `val`, and `test` folders. Test membership is exactly your
 selection. Training/validation membership is shuffled with seed 42 by default,
@@ -206,7 +209,9 @@ python scripts/label_dataset.py --export data/topdown_labeled_v2 --seed 42
 ```
 
 CLI ratio overrides can also be saved with `--val-fraction 0.1 --test-fraction 0.2`;
-the training fraction is the remainder. `manifest.json` records requested
+the training fraction is the remainder. Use `--val-fraction 0 --test-fraction 1`
+for test-only exports with all completed images marked for test.
+`manifest.json` records requested
 fractions and actual split counts. Training continues to use only `train` and
 `val`; test stays held out. The dataset builder supports `build_dataset('test',
 args=...)` with evaluation transforms for later testing.

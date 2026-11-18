@@ -5,10 +5,14 @@ import traceback
 from contextlib import redirect_stdout
 from pathlib import Path
 
-
 BBOX_FIELDS = (
-    "bbox_tp", "bbox_fp", "bbox_fn", "bbox_missing_objects",
-    "bbox_extra_detections", "bbox_extra_relation_fp", "bbox_image_correct",
+    "bbox_tp",
+    "bbox_fp",
+    "bbox_fn",
+    "bbox_missing_objects",
+    "bbox_extra_detections",
+    "bbox_extra_relation_fp",
+    "bbox_image_correct",
 )
 SCORE_FIELDS = ("recall", "precision", "f1", "image_accuracy")
 
@@ -23,7 +27,7 @@ def calculate_scores(tp, fp, fn, correct_images, image_count):
     }
 
 
-def save_visualizations(image_path, prediction, output_dir):
+def save_visualizations(image_path, prediction, output_dir, *, ground_truth=False):
     from PIL import Image, ImageDraw, ImageFont
     from infer_unlabeled_dataset import visualize
 
@@ -36,24 +40,33 @@ def save_visualizations(image_path, prediction, output_dir):
     except OSError:
         label_font = font = ImageFont.load_default()
     annotated = visualize(
-        image, prediction["detections"], prediction["relationships"],
-        with_arrows=True, font=label_font,
+        image,
+        prediction["detections"],
+        prediction["relationships"],
+        with_arrows=True,
+        font=label_font,
     )
 
     # Keep the complete relationship list outside the image so it cannot cover
     # objects or become unreadable when many arrows overlap.
     detections = {det["id"]: det for det in prediction["detections"]}
     relationships = prediction["relationships"]
-    lines = [f"Predicted relationships ({len(relationships)})"]
+    lines = [
+        f"{'Ground-truth' if ground_truth else 'Predicted'} relationships ({len(relationships)})"
+    ]
     for rel in relationships:
         above_id, below_id = rel["above_id"], rel["below_id"]
         lines.append(
             f'#{above_id} {detections[above_id]["class_name"]} above '
             f'#{below_id} {detections[below_id]["class_name"]}'
-            f'  ({rel["confidence"]:.2f})'
+            + (f'  ({rel["confidence"]:.2f})' if not ground_truth else "")
         )
     if not relationships:
-        lines.append("No relationships predicted.")
+        lines.append(
+            "No relationships annotated."
+            if ground_truth
+            else "No relationships predicted."
+        )
 
     padding = 16
     measure = ImageDraw.Draw(annotated)
@@ -62,16 +75,20 @@ def save_visualizations(image_path, prediction, output_dir):
     panel_width = max(box[2] - box[0] for box in bounds) + 2 * padding
     canvas = Image.new(
         "RGB",
-        (annotated.width + panel_width,
-         max(annotated.height, 2 * padding + len(lines) * line_height)),
+        (
+            annotated.width + panel_width,
+            max(annotated.height, 2 * padding + len(lines) * line_height),
+        ),
         (24, 24, 24),
     )
     canvas.paste(annotated, (0, 0))
     draw = ImageDraw.Draw(canvas)
     for index, (line, box) in enumerate(zip(lines, bounds)):
         draw.text(
-            (annotated.width + padding - box[0],
-             padding + index * line_height - box[1]),
+            (
+                annotated.width + padding - box[0],
+                padding + index * line_height - box[1],
+            ),
             line,
             font=font,
             fill=(255, 220, 90) if index == 0 else (240, 240, 240),
@@ -227,8 +244,11 @@ def evaluate_split(
             row = rows[-1]
             for prefix in ("", "bbox_"):
                 scores = calculate_scores(
-                    row[f"{prefix}tp"], row[f"{prefix}fp"], row[f"{prefix}fn"],
-                    row[f"{prefix}image_correct"], 1,
+                    row[f"{prefix}tp"],
+                    row[f"{prefix}fp"],
+                    row[f"{prefix}fn"],
+                    row[f"{prefix}image_correct"],
+                    1,
                 )
                 row.update({f"{prefix}{key}": value for key, value in scores.items()})
             if save_images:
@@ -294,7 +314,9 @@ def evaluate_split(
     total_extra = sum(r["extra_detections"] for r in rows)
     correct_images = sum(r["image_correct"] for r in rows)
 
-    class_scores = calculate_scores(total_tp, total_fp, total_fn, correct_images, len(rows))
+    class_scores = calculate_scores(
+        total_tp, total_fp, total_fn, correct_images, len(rows)
+    )
 
     print("\n=== DATASET RESULTS ===")
     print(f"Images requested: {len(images)}")
@@ -307,34 +329,66 @@ def evaluate_split(
     print(f"Total missing objects: {total_missing}")
     print(f"Total extra detections: {total_extra}")
     print(f"TP: {total_tp}, FP: {total_fp}, FN: {total_fn}")
-    for key, label in (("recall", "micro edge recall"), ("precision", "micro edge precision"),
-                       ("f1", "micro edge F1"), ("image_accuracy", "image accuracy")):
+    for key, label in (
+        ("recall", "micro edge recall"),
+        ("precision", "micro edge precision"),
+        ("f1", "micro edge F1"),
+        ("image_accuracy", "image accuracy"),
+    ):
         score = class_scores[key]
         print(f"Class-aware {label}: {score * 100.0 if score is not None else 'N/A'}")
     bbox = {key: sum(row[key] for row in rows) for key in BBOX_FIELDS}
     tp, fp, fn = bbox["bbox_tp"], bbox["bbox_fp"], bbox["bbox_fn"]
     bbox_scores = calculate_scores(tp, fp, fn, bbox["bbox_image_correct"], len(rows))
     print("\nBox-only relationship metrics (IoU >= 0.5; object classes ignored):")
-    print(f"TP: {tp}, FP: {fp}, FN: {fn}")
+    print(
+        f"Correct Relationships(TP): {tp}\nIncorrect Relationships(FP): {fp}\nMissed Relationships(FN): {fn}"
+    )
     print(f"Total missing boxes: {bbox['bbox_missing_objects']}")
     print(f"Total extra boxes: {bbox['bbox_extra_detections']}")
-    for key, label in (("recall", "micro edge recall"), ("precision", "micro edge precision"),
-                       ("f1", "micro edge F1"), ("image_accuracy", "image accuracy")):
+    for key, label in (
+        ("recall", "relationship recall"),
+        ("precision", "relationship precision"),
+        ("f1", "F1"),
+        ("image_accuracy", "image accuracy"),
+    ):
         score = bbox_scores[key]
         print(f"Box-only {label}: {score * 100.0 if score is not None else 'N/A'}")
 
     summary_path = image_output_dir / "summary.csv"
     with summary_path.open("w", newline="") as f:
         writer = csv.DictWriter(
-            f, fieldnames=("evaluation", "images_evaluated", "tp", "fp", "fn", *SCORE_FIELDS)
+            f,
+            fieldnames=(
+                "evaluation",
+                "images_evaluated",
+                "tp",
+                "fp",
+                "fn",
+                *SCORE_FIELDS,
+            ),
         )
         writer.writeheader()
-        writer.writerows([
-            dict(evaluation="class_aware", images_evaluated=len(rows),
-                 tp=total_tp, fp=total_fp, fn=total_fn, **class_scores),
-            dict(evaluation="box_only", images_evaluated=len(rows),
-                 tp=tp, fp=fp, fn=fn, **bbox_scores),
-        ])
+        writer.writerows(
+            [
+                dict(
+                    evaluation="strict matching (class aware)",
+                    images_evaluated=len(rows),
+                    tp=total_tp,
+                    fp=total_fp,
+                    fn=total_fn,
+                    **class_scores,
+                ),
+                dict(
+                    evaluation="location only",
+                    images_evaluated=len(rows),
+                    tp=tp,
+                    fp=fp,
+                    fn=fn,
+                    **bbox_scores,
+                ),
+            ]
+        )
     print(f"\nResults saved: {csv_path}")
     print(f"Dataset summary: {summary_path}")
     print(f"Error log: {error_path}")

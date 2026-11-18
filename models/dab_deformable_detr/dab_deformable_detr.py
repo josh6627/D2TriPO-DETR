@@ -742,7 +742,7 @@ class SetCriterion(nn.Module):
             pred_adj_perm = pred_adj_perm.float()
 
             target_adj = target_adj.float()
-            print(f"pred_adj:{pred_adj_perm}, target_adj:{target_adj}")
+            # print(f"pred_adj:{pred_adj_perm}, target_adj:{target_adj}")
             loss_adj = (
                 torch.nn.functional.binary_cross_entropy_with_logits(
                     pred_adj_perm, target_adj, reduction="sum"

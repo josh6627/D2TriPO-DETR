@@ -41,6 +41,12 @@ runs/
 .env.*
 !.env.example
 
+# Local agent instructions and weekly project memory
+/AGENTS.md
+/WEEKLY_LOG.md
+
+# Presentations
+/presentations
 # Editor and OS files
 .DS_Store
 Thumbs.db

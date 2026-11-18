@@ -1043,10 +1043,10 @@ class Labeler:
             ) from exc
         if (
             not math.isfinite(train)
-            or train <= 0
+            or train < 0
             or not math.isclose(train + val + test, 100, abs_tol=1e-6)
         ):
-            raise ValueError("All three percentages must be positive and sum to 100.")
+            raise ValueError("All three percentages must be nonnegative and sum to 100.")
         self.project.set_split_fractions(val / 100, test / 100)
         self.refresh()
 

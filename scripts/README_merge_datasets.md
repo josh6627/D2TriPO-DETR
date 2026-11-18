@@ -54,6 +54,9 @@ The source `images`, `labels`, `adj`, and `grasps` train/val/test layout is pres
 are accepted; their samples are not reassigned to test. Test selections from new
 labeler exports remain held out. The merge does not resplit the combined data,
 so its overall ratios depend on the input datasets.
+Test-only labeler exports (`0, 0, 100`) are supported, including their empty train
+and val directories. Merge them with datasets supplying train and val images;
+the combined dataset must still contain at least one image in each of those splits.
 Output samples receive unique numeric stems across all sources and splits, so
 repeated names like `000001.png` cannot overwrite each other. Other supported
 image formats (BMP, TIFF, WebP) are converted to RGB PNG; JPEG/PNG bytes are copied.

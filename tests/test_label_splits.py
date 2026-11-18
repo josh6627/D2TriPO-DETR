@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
 
 from PIL import Image
 from scripts.label_project import Project
@@ -94,6 +95,93 @@ class SplitExportTests(unittest.TestCase):
         self.assertEqual(reopened.data['test_images'],[])
         self.assertEqual(reopened.data['split_fractions']['test'],.2)
         self.assertEqual(reopened.sample('2.png'),original)
+
+    def test_zero_ratios_export_and_persist(self):
+        for val, test, expected in (
+            (0, 1, (0, 0, 10)), (0, 0, (10, 0, 0)), (1, 0, (0, 10, 0)),
+            (.2, 0, (8, 2, 0)), (0, .2, (8, 0, 2)), (.8, .2, (0, 8, 2)),
+        ):
+            with self.subTest(val=val, test=test):
+                self.project.set_split_fractions(val, test)
+                self.project.data['test_images'] = self.project.files[:expected[2]]
+                self.project.save()
+                reopened = Project(self.images, self.project.path)
+                self.assertEqual(reopened.test_progress()['target'], expected[2])
+                output = reopened.export(self.root/f'export_{val}_{test}')
+                counts = dict(zip(('train', 'val', 'test'), expected))
+                self.assertEqual(json.loads((output/'manifest.json').read_text())['split_counts'], counts)
+                for folder in ('images', 'labels', 'adj', 'grasps'):
+                    for split, count in counts.items():
+                        self.assertEqual(len(list((output/folder/split).iterdir())), count)
+
+    def test_single_image_exports_for_each_exclusive_split(self):
+        for name in self.project.files[1:]:
+            self.project.sample(name)['complete'] = False
+        for val, test, split in ((0, 0, 'train'), (1, 0, 'val'), (0, 1, 'test')):
+            with self.subTest(split=split):
+                self.project.set_split_fractions(val, test)
+                self.project.data['test_images'] = self.project.files[:test]
+                output = self.project.export(self.root/split)
+                self.assertEqual(json.loads((output/'manifest.json').read_text())['split_counts'],
+                                 {s: int(s == split) for s in ('train', 'val', 'test')})
+        self.project.sample(self.project.files[0])['complete'] = False
+        with self.assertRaises(ValueError):
+            self.project.export(self.root/'empty')
+
+    def test_test_membership_still_requires_manual_selection_at_zero_and_100(self):
+        for fraction, selected, target in ((0, ['2.png'], 0), (1, [], 10)):
+            with self.subTest(fraction=fraction):
+                self.project.set_split_fractions(0, fraction)
+                self.project.data['test_images'] = selected
+                with self.assertRaisesRegex(ValueError, f'Choose exactly {target}'):
+                    self.project.export(self.root/'invalid')
+                self.assertFalse((self.root/'invalid').exists())
+
+    def test_ratio_dialog_accepts_zero_and_rejects_invalid_percentages(self):
+        from scripts.label_dataset import Labeler
+        app = SimpleNamespace(project=self.project, root=None, refresh=Mock())
+        for value in ('0, 0, 100', '100, 0, 0', '0, 100, 0', '0, 80, 20'):
+            with patch('scripts.label_dataset.simpledialog.askstring', return_value=value):
+                Labeler.edit_split_ratios(app)
+            self.assertEqual(list(self.project.data['split_fractions'].values()),
+                             [float(v)/100 for v in value.split(',')])
+        for value in ('-1, 1, 100', '100, -1, 1', '100, 1, -1', '0, 0, 0',
+                      'nan, 0, 100', '0, inf, 0'):
+            with self.subTest(value=value):
+                before = self.project.data['split_fractions'].copy()
+                with patch('scripts.label_dataset.simpledialog.askstring', return_value=value):
+                    with self.assertRaises(ValueError):
+                        Labeler.edit_split_ratios(app)
+                self.assertEqual(self.project.data['split_fractions'], before)
+
+    def test_test_only_export_merges_with_train_val_and_loads(self):
+        from datasets import build_dataset
+        self.project.set_split_fractions(0, 1)
+        for name in self.project.files:
+            self.project.set_test_image(name, True)
+        test_only = self.project.export(self.root/'test_only')
+        # A separate dataset supplies train/val images with distinct contents.
+        other_images = self.root/'other_images'
+        other_images.mkdir()
+        for i in range(2):
+            Image.new('RGB', (50, 40), (0, i*100, 0)).save(other_images/f'{i}.png')
+        other = Project(other_images, self.root/'other.json', require_grasps=False)
+        other.set_split_fractions(.5, 0)
+        for name in other.files:
+            other.sample(name).update(objects=[{'id':4,'class_id':0,'box':[5,5,40,35]}],
+                                      relations_reviewed=True, complete=True)
+        train_val = other.export(self.root/'train_val')
+        samples, report = audit([train_val, test_only])
+        self.assertEqual({s: c['images'] for s, c in report['counts'].items()},
+                         {'train': 1, 'val': 1, 'test': 10})
+        merged = self.root/'merged'
+        write_dataset(merged, samples, report)
+        for split, count in (('train', 1), ('val', 1), ('test', 10)):
+            dataset = build_dataset(split, args=SimpleNamespace(dataset_root=merged, no_grasps=True))
+            self.assertEqual(len(dataset), count)
+            for i in range(count):
+                _, target = dataset[i]
+                self.assertEqual(target['labels'].tolist(), [0])
 
     def test_merge_preserves_test_and_loader_reads_it(self):
         from datasets import build_dataset

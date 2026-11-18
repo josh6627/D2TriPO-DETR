@@ -15,14 +15,14 @@ SPLITS = ('train', 'val', 'test')
 
 
 def split_fractions(val_fraction=.1, test_fraction=.2):
-    if (not all(math.isfinite(v) and 0 < v < 1 for v in (val_fraction, test_fraction))
-            or val_fraction+test_fraction >= 1):
-        raise ValueError('Train, validation, and test fractions must be positive and sum to one.')
-    return {'train': 1-val_fraction-test_fraction, 'val': val_fraction, 'test': test_fraction}
+    if (not all(math.isfinite(v) and 0 <= v <= 1 for v in (val_fraction, test_fraction))
+            or val_fraction+test_fraction > 1):
+        raise ValueError('Train, validation, and test fractions must be nonnegative and sum to one.')
+    return {'train': 1-(val_fraction+test_fraction), 'val': val_fraction, 'test': test_fraction}
 
 
 def test_target(total, fraction):
-    return max(1, math.floor(total*fraction+.5)) if total else 0
+    return max(1, math.floor(total*fraction+.5)) if total and fraction > 0 else 0
 
 
 def atomic_json(path, value):
@@ -179,16 +179,20 @@ class Project:
         fractions = split_fractions(settings['val'] if val_fraction is None else val_fraction,
                                     settings['test'] if test_fraction is None else test_fraction)
         names = [n for n in self.files if self.sample(n).get('complete')]
-        if len(names) < 3:
-            raise ValueError('Mark at least three images complete for train/validation/test export.')
+        required = sum(f > 0 for f in fractions.values())
+        if len(names) < required:
+            minimum = 'three' if required == 3 else str(required)
+            raise ValueError(f'Mark at least {minimum} images complete for the nonzero splits.')
         test_names = set(self.data['test_images']) & set(names)
         target = test_target(len(names), fractions['test'])
         if len(test_names) != target:
             raise ValueError(f'Choose exactly {target} completed test images for the '
                              f'{fractions["test"]:.0%} target ({len(names)} completed images); '
                              f'currently selected {len(test_names)}. Test images are never chosen automatically.')
-        if len(names)-len(test_names) < 2:
-            raise ValueError('Leave at least two completed images outside test for training and validation.')
+        non_test_splits = sum(fractions[s] > 0 for s in ('train', 'val'))
+        if len(names)-len(test_names) < non_test_splits:
+            raise ValueError(f'Leave at least {non_test_splits} completed images outside test '
+                             'for the nonzero training/validation splits.')
         sizes = {}
         for name in names:
             with Image.open(self.images / name) as im:
@@ -200,7 +204,8 @@ class Project:
                 raise ValueError(f'{name}: {exc}') from exc
         shuffled = [n for n in names if n not in test_names]
         random.Random(seed).shuffle(shuffled)
-        val_count = max(1, min(len(shuffled)-1, math.floor(len(names)*fractions['val']+.5)))
+        val_count = (0 if fractions['val'] == 0 else len(shuffled) if fractions['train'] == 0
+                     else max(1, min(len(shuffled)-1, math.floor(len(names)*fractions['val']+.5))))
         val_names = set(shuffled[:val_count])
         counts = {'train': len(shuffled)-val_count, 'val': val_count, 'test': len(test_names)}
         manifest = {'version': 1, 'source': str(self.path), 'seed': seed,

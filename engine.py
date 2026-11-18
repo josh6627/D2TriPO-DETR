@@ -60,7 +60,7 @@ def train_one_epoch(
 
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-        print(f"Image {k} has shape = {samples.shape} ")
+        # print(f"Image {k} has shape = {samples.shape} ")
         with torch.cuda.amp.autocast(enabled=args.amp):
             if need_tgt_for_training:
                 outputs = model(samples, targets)
